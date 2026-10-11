@@ -26,7 +26,7 @@ export default {
     }
     */
 
-    const { name } = await req.json()
+    const { name = 'world' } = await req.json().catch(() => ({}))
 
     return Response.json({
       message: `Hello ${name}!`,
