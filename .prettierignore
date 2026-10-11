@@ -1,0 +1,9 @@
+dist
+ios
+android
+package-lock.json
+playwright-report
+test-results
+supabase/.temp
+CLAUDE.md
+DESIGN.md
