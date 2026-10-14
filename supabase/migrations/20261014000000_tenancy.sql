@@ -170,3 +170,20 @@ grant select, delete on public.household_invites to authenticated;
 grant insert (household_id, expires_at) on public.household_invites to authenticated;
 grant all on public.profiles, public.households, public.household_members,
   public.household_invites to service_role;
+
+-- ── Invite guess limiting ─────────────────────────────────────────────────
+-- Failed invite-code guesses, so accept-invite can limit them per user.
+-- Not household data: only the Edge Function (service role) reads or writes it.
+create table public.invite_attempts (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index invite_attempts_user_id_created_at_idx on public.invite_attempts (user_id, created_at);
+create trigger set_updated_at before update on public.invite_attempts
+  for each row execute function public.set_updated_at();
+
+alter table public.invite_attempts enable row level security;  -- no policies: apps get nothing
+revoke all on public.invite_attempts from anon, authenticated;
+grant all on public.invite_attempts to service_role;

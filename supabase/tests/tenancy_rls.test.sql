@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(36);
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local', '{"full_name": "Owner A"}'),
@@ -120,6 +120,13 @@ select pg_temp.login('00000000-0000-0000-0000-00000000000a');
 delete from public.household_invites;
 reset role;
 select is((select count(*)::int from public.household_invites), 0, 'owner can delete invites');
+
+-- ── invite_attempts (Edge Function only) ─────────────────────────────────
+select pg_temp.login('00000000-0000-0000-0000-00000000000a');
+select throws_ok('select * from public.invite_attempts', '42501', null, 'apps cannot read invite attempts');
+select throws_ok($$ insert into public.invite_attempts (user_id) values ('00000000-0000-0000-0000-00000000000a') $$,
+  '42501', null, 'apps cannot write invite attempts');
+reset role;
 
 -- ── anon + timestamps ────────────────────────────────────────────────────
 set local role anon;

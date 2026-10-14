@@ -1,4 +1,4 @@
-import { checkInvite, normaliseCode } from './check'
+import { checkInvite, isGuessLimited, normaliseCode } from './check'
 
 const now = new Date('2026-10-14T00:00:00Z')
 const future = '2026-10-20T00:00:00Z'
@@ -23,4 +23,9 @@ test('used invite is rejected even if not expired', () => {
 test('codes are normalised', () => {
   expect(normaliseCode(' ab12-cd34 ')).toBe('AB12CD34')
   expect(normaliseCode(42)).toBe('')
+})
+
+test('guessing is limited after 5 failures', () => {
+  expect(isGuessLimited(4)).toBe(false)
+  expect(isGuessLimited(5)).toBe(true)
 })
