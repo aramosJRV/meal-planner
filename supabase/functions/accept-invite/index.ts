@@ -54,7 +54,10 @@ export default {
       .from('household_members')
       .insert({ household_id: invite!.household_id, user_id: userId, role: 'member' })
     if (joinError) {
-      await db.from('household_invites').update({ used_by: null, used_at: null }).eq('id', invite!.id)
+      await db
+        .from('household_invites')
+        .update({ used_by: null, used_at: null })
+        .eq('id', invite!.id)
       return fail('server_error', 500)
     }
 
