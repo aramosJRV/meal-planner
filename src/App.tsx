@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import Home from '@/screens/Home'
 import Onboarding from '@/screens/Onboarding'
@@ -37,9 +38,10 @@ export default function App() {
   if (households.isPending) return null
   if (households.isError)
     return (
-      <p role="alert" className="p-6">
-        Couldn't load your household. Please try again.
-      </p>
+      <main className="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-4 p-6">
+        <p role="alert">Couldn't load your household.</p>
+        <Button onClick={() => households.refetch()}>Try again</Button>
+      </main>
     )
   // TODO(v2): household switcher when a user belongs to more than one.
   const household = households.data[0]

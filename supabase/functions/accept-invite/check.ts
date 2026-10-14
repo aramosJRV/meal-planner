@@ -5,7 +5,9 @@ export type InviteProblem = 'not_found' | 'expired' | 'used'
 
 // Failed (not_found) guesses allowed per user per hour, so codes can't be brute-forced.
 export const MAX_FAILED_GUESSES = 5
-export const isGuessLimited = (failedLastHour: number) => failedLastHour >= MAX_FAILED_GUESSES
+// The count includes the current attempt, so the 6th try in an hour is refused.
+export const isGuessLimited = (attemptsInclThisOne: number) =>
+  attemptsInclThisOne > MAX_FAILED_GUESSES
 
 export function checkInvite(invite: Invite | null, now = new Date()): InviteProblem | null {
   if (!invite) return 'not_found'

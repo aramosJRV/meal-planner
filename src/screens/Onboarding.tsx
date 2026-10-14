@@ -29,7 +29,7 @@ export default function Onboarding() {
     mutationFn: async (code: string) => {
       const { error } = await supabase.functions.invoke('accept-invite', { body: { code } })
       if (error instanceof FunctionsHttpError) {
-        const { error: reason } = await error.context.json()
+        const { error: reason } = await error.context.json().catch(() => ({}))
         throw new Error(joinErrors[reason] ?? 'Something went wrong. Please try again.')
       }
       if (error) throw new Error('Something went wrong. Please try again.')

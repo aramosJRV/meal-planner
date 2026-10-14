@@ -22,6 +22,14 @@ export default function Home({ household, userId }: Props) {
     },
   })
 
+  const signOut = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.clear(),
+  })
+
   const invite = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase
@@ -37,6 +45,12 @@ export default function Home({ household, userId }: Props) {
   return (
     <Screen title={household.name}>
       <p className="text-muted-foreground">Your week's meals will appear here.</p>
+
+      {role.isError && (
+        <p role="alert" className="text-destructive text-sm">
+          Couldn't load your household details. Please reload the app.
+        </p>
+      )}
 
       {role.data === 'owner' && (
         <section className="flex flex-col gap-3">
@@ -65,15 +79,14 @@ export default function Home({ household, userId }: Props) {
         </section>
       )}
 
-      <Button
-        variant="ghost"
-        onClick={async () => {
-          await supabase.auth.signOut()
-          queryClient.clear()
-        }}
-      >
+      <Button variant="ghost" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
         Sign out
       </Button>
+      {signOut.isError && (
+        <p role="alert" className="text-destructive text-sm">
+          Couldn't sign out. Check your connection and try again.
+        </p>
+      )}
     </Screen>
   )
 }

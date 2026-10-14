@@ -25,7 +25,7 @@ test('codes are normalised', () => {
   expect(normaliseCode(42)).toBe('')
 })
 
-test('guessing is limited after 5 failures', () => {
-  expect(isGuessLimited(4)).toBe(false)
-  expect(isGuessLimited(5)).toBe(true)
+test('the 6th attempt after 5 failures is refused', () => {
+  expect(isGuessLimited(5)).toBe(false)
+  expect(isGuessLimited(6)).toBe(true)
 })

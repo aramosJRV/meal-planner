@@ -5,6 +5,9 @@ import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 import Screen from './Screen'
 
+// A failed magic link (expired, already used) comes back as #error_code=… in the URL.
+const linkError = new URLSearchParams(window.location.hash.slice(1)).get('error_code')
+
 export default function SignIn() {
   const send = useMutation({
     mutationFn: async (email: string) => {
@@ -32,6 +35,13 @@ export default function SignIn() {
   return (
     <Screen title="Meal Planner">
       <p className="text-muted-foreground">Plan your week, shop once. Sign in to get started.</p>
+      {linkError && (
+        <p role="alert" className="text-destructive text-sm">
+          {linkError === 'otp_expired'
+            ? 'That sign-in link has expired or was already used. Request a new one below.'
+            : "That sign-in link didn't work. Request a new one below."}
+        </p>
+      )}
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {

@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(36);
+select plan(41);
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local', '{"full_name": "Owner A"}'),
@@ -18,7 +18,8 @@ create function pg_temp.ha() returns uuid language sql as $$ select current_sett
 create function pg_temp.hb() returns uuid language sql as $$ select current_setting('test.hb')::uuid $$;
 
 -- ── Setup ────────────────────────────────────────────────────────────────
-select is((select count(*)::int from public.profiles), 3, 'signup trigger creates a profile per user');
+select is((select count(*)::int from public.profiles where user_id::text like '00000000-0000-0000-0000-%'), 3,
+  'signup trigger creates a profile per user');
 select is((select display_name from public.profiles where user_id = '00000000-0000-0000-0000-00000000000a'),
   'Owner A', 'profile picks up the name from sign-up metadata');
 
@@ -113,13 +114,32 @@ select throws_ok($$ update public.household_invites set used_at = now() $$, '425
   'clients cannot mark invites used');
 
 reset role;
-select is((select count(*)::int from public.household_invites), 1, 'member and non-member deletes have no effect');
-select matches((select code from public.household_invites), '^[0-9A-F]{8}$', 'invite code is 8 upper-case hex chars');
+select is((select count(*)::int from public.household_invites where household_id = pg_temp.ha()), 1,
+  'member and non-member deletes have no effect');
+select matches((select code from public.household_invites where household_id = pg_temp.ha()), '^[0-9A-F]{8}$', 'invite code is 8 upper-case hex chars');
 
 select pg_temp.login('00000000-0000-0000-0000-00000000000a');
 delete from public.household_invites;
 reset role;
-select is((select count(*)::int from public.household_invites), 0, 'owner can delete invites');
+select is((select count(*)::int from public.household_invites where household_id = pg_temp.ha()), 0,
+  'owner can delete invites');
+
+-- ── columns and actions clients never get ────────────────────────────────
+select pg_temp.login('00000000-0000-0000-0000-0000000000a2');
+select throws_ok($$ update public.household_members set role = 'owner' $$, '42501', null,
+  'member cannot change their role');
+select pg_temp.login('00000000-0000-0000-0000-00000000000a');
+select throws_ok($$ update public.household_invites set expires_at = now() $$, '42501', null,
+  'owner cannot edit an invite');
+select throws_ok($$ update public.households set id = gen_random_uuid() $$, '42501', null,
+  'owner cannot change ungranted household columns');
+select throws_ok($$ insert into public.household_invites (household_id, used_by)
+  values (current_setting('test.ha')::uuid, '00000000-0000-0000-0000-00000000000a') $$,
+  '42501', null, 'clients cannot set used_by');
+select throws_ok($$ insert into public.household_invites (household_id, created_by)
+  values (current_setting('test.ha')::uuid, '00000000-0000-0000-0000-0000000000a2') $$,
+  '42501', null, 'clients cannot set created_by');
+reset role;
 
 -- ── invite_attempts (Edge Function only) ─────────────────────────────────
 select pg_temp.login('00000000-0000-0000-0000-00000000000a');

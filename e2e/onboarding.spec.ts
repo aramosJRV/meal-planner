@@ -6,6 +6,7 @@ const MAILPIT = 'http://127.0.0.1:54324/api/v1'
 async function magicLink(email: string) {
   for (let i = 0; i < 20; i++) {
     const res = await fetch(`${MAILPIT}/search?query=${encodeURIComponent(`to:"${email}"`)}`)
+    if (!res.ok) throw new Error(`Mailpit search failed: ${res.status}`)
     const { messages } = (await res.json()) as { messages?: { ID: string }[] }
     if (messages?.length) {
       const msg = (await (await fetch(`${MAILPIT}/message/${messages[0].ID}`)).json()) as {
@@ -40,10 +41,17 @@ test('sign in by magic link, create a household, invite a second person', async 
   await expect(page.getByRole('heading', { name: `The Testers ${run}` })).toBeVisible()
 
   await page.getByRole('button', { name: 'Invite someone' }).click()
+  await expect(page.getByTestId('invite-code')).toBeVisible()
   const code = await page.getByTestId('invite-code').textContent()
 
   const other = await (await browser.newContext()).newPage()
   await signIn(other, `member-${run}@test.local`)
+  await other.getByLabel('Invite code').fill('NOTACODE')
+  await other.getByRole('button', { name: 'Join household' }).click()
+  await expect(other.getByRole('alert')).toHaveText(
+    "We couldn't find that code. Check it and try again.",
+  )
+
   await other.getByLabel('Invite code').fill(code!.toLowerCase())
   await other.getByRole('button', { name: 'Join household' }).click()
   await expect(other.getByRole('heading', { name: `The Testers ${run}` })).toBeVisible()
