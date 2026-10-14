@@ -38,3 +38,8 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 - Context7 MCP for current Capacitor / Supabase / TanStack docs.
 - Playwright MCP for UI verification of the web build.
 - Official plugins: `code-review`, `pr-review-toolkit`, `security-guidance` (all `@claude-plugins-official`).
+
+## Current state
+- M0 (Scaffold) merged to `main` 2026-10-12 (PR #1). M1 (Tenancy) in progress on `feat/m1-tenancy`.
+- GitHub repo is public (free accounts can't protect private branches). `main` is protected: PR only, required checks, no force-push, applies to admins.
+- Local dev only — no hosted Supabase project is linked yet.
