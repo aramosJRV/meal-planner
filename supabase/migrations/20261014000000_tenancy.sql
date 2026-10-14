@@ -155,7 +155,10 @@ create policy "household_invites: owners create" on public.household_invites
 create policy "household_invites: owners delete" on public.household_invites
   for delete to authenticated using (public.is_household_owner(household_id));
 
--- ── API grants (new tables aren't auto-exposed) ───────────────────────────
+-- ── API grants ────────────────────────────────────────────────────────────
+-- Supabase still auto-grants everything locally; start from nothing so only the grants below apply.
+revoke all on public.profiles, public.households, public.household_members,
+  public.household_invites from anon, authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name, avatar_url) on public.profiles to authenticated;
 grant select on public.households to authenticated;
