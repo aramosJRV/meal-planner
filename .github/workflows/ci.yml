@@ -26,6 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci
+      - run: cp .env.example .env
       - run: npm test
 
   build:
@@ -44,8 +45,22 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with: { version: 2.120.0 }
+      # Auth, API, functions and the Mailpit inbox are needed for the magic-link flow.
+      - run: supabase start -x realtime,storage-api,imgproxy,studio,postgres-meta,logflare,vector,supavisor
+      - run: cp .env.example .env
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - if: failure()
         uses: actions/upload-artifact@v4
         with: { name: playwright-report, path: playwright-report }
+
+  rls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: 2.120.0 }
+      - run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - run: supabase test db
