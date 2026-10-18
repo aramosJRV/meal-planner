@@ -42,6 +42,5 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 ## Current state
 - M0 (Scaffold) merged 2026-10-12 (PR #1). M1 (Tenancy) merged 2026-10-18 (PR #2). Next: M2 (Recipes).
 - Required checks on `main`: lint, test, build, e2e, rls. Local dev needs Docker Desktop running + `supabase start`.
-- M1 follow-ups (need migration approval): make claim+join in accept-invite one SQL transaction; cap invite `expires_at`.
 - GitHub repo is public (free accounts can't protect private branches). `main` is protected: PR only, required checks, no force-push, applies to admins.
 - Local dev only — no hosted Supabase project is linked yet.

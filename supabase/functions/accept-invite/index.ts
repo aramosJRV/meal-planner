@@ -61,31 +61,14 @@ export default {
     // Already a member: succeed without burning the code for someone else.
     if (existing) return Response.json({ household_id: invite!.household_id })
 
-    // Claim first, conditionally, so two people can't use the same code at once.
-    const { data: claimed, error: claimError } = await db
-      .from('household_invites')
-      .update({ used_by: userId, used_at: new Date().toISOString() })
-      .eq('id', invite!.id)
-      .is('used_at', null)
-      .select('id')
-      .maybeSingle()
-    if (claimError) return serverError('claim invite', claimError)
-    if (!claimed) return fail('used')
+    // Marks the code used and adds the member in one transaction; null if someone used it first.
+    const { data: householdId, error: redeemError } = await db.rpc('redeem_invite', {
+      p_invite_id: invite!.id,
+      p_user_id: userId,
+    })
+    if (redeemError) return serverError('redeem invite', redeemError)
+    if (!householdId) return fail('used')
 
-    const { error: joinError } = await db
-      .from('household_members')
-      .insert({ household_id: invite!.household_id, user_id: userId, role: 'member' })
-    if (joinError) {
-      const { error: undoError } = await db
-        .from('household_invites')
-        .update({ used_by: null, used_at: null })
-        .eq('id', invite!.id)
-      // If this fails the code stays used with nobody joined; the owner must make a new one.
-      if (undoError)
-        console.error(`accept-invite: release invite ${invite!.id} for ${userId}`, undoError)
-      return serverError('add member', joinError)
-    }
-
-    return Response.json({ household_id: invite!.household_id })
+    return Response.json({ household_id: householdId })
   }),
 }
