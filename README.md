@@ -34,6 +34,22 @@ Sign-in uses an email magic link. Locally, no real email is sent — Supabase ca
 
 Sign in with Apple and Google are set up in `supabase/config.toml` but switched off until real credentials exist (see the `env(...)` placeholders there).
 
+## AI import (captions, screenshots, links without recipe data)
+
+The `extract-recipe` Edge Function reads recipes with Claude (Sonnet 5.5). It needs an Anthropic API key, which lives only in Edge Function secrets, never in the app:
+
+- Locally: put `ANTHROPIC_API_KEY=...` in `supabase/functions/.env` (git-ignored), then `supabase stop && supabase start`.
+- Each household gets 20 AI imports per 24 hours (`AI_EXTRACT_DAILY_LIMIT` to change it).
+
+Without a key, importing from a recipe site with built-in recipe data still works; anything that needs the AI shows an error.
+
+## Share sheet
+
+"Share → Meal Planner" from Instagram, Safari, Photos and others opens the import screen prefilled (plugin `@capgo/capacitor-share-target`).
+
+- Android: intent filters in `android/app/src/main/AndroidManifest.xml`.
+- iOS: the `ShareExtension` target (`ios/App/ShareExtension`) hands content to the app through the App Group `group.com.jrvsolutions.mealplanner`. To run on a device, pick your team for both the App and ShareExtension targets in Xcode (Signing & Capabilities); App Groups need a paid Apple Developer account.
+
 ## Recipes and seed data
 
 The database comes with read-only reference data, added by migration `20261020000001_recipe_seed.sql` (so it exists everywhere, not just locally):
