@@ -1,13 +1,24 @@
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { applyMatches, type Hint, readLines } from '@/lib/importLines'
+import { supabase } from '@/lib/supabase'
 import { type Draft, go, MEAL_TYPES, useSaveRecipe } from './recipeData'
 
 const textarea =
   'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-[3px] md:text-sm'
 
-type Props = { householdId: string; recipeId?: string; initial: Draft; saveLabel?: string }
+type Props = {
+  householdId: string
+  recipeId?: string
+  initial: Draft
+  saveLabel?: string
+  // Import review: the AI's reading of each line, and the import to mark saved.
+  hints?: Record<string, Hint>
+  importId?: string
+}
 
 // Used for adding by hand, reviewing an import, and editing.
 export default function RecipeForm({
@@ -15,8 +26,27 @@ export default function RecipeForm({
   recipeId,
   initial,
   saveLabel = 'Save recipe',
+  hints,
+  importId,
 }: Props) {
   const save = useSaveRecipe(householdId, recipeId)
+  // Import review only: match lines to existing ingredients, refreshed when the box loses focus.
+  const [checkedText, setCheckedText] = useState(initial.ingredients)
+  const checkedLines = readLines(checkedText, hints)
+  const names = [...new Set(checkedLines.map((l) => l.canonical_name))]
+  const matches = useQuery({
+    queryKey: ['match_ingredients', householdId, names],
+    enabled: !!hints && names.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('match_ingredients', {
+        p_household_id: householdId,
+        p_names: names,
+      })
+      if (error) throw error
+      return data as { query: string; name: string | null; canonical_name: string | null }[]
+    },
+  })
+  const matched = applyMatches(checkedLines, matches.data)
   // The planner only suggests a recipe for the meals it suits, so at least one is needed.
   const [noMealType, setNoMealType] = useState(false)
   const text = (f: FormData, k: string) => (f.get(k) as string).trim() || null
@@ -31,8 +61,11 @@ export default function RecipeForm({
         setNoMealType(!types.length)
         if (!types.length) return
         const f = new FormData(e.currentTarget)
+        const ingredients = f.get('ingredients') as string
         save.mutate(
           {
+            // Review: save with the AI reading and the matches shown (unmatched → new ingredient).
+            lines: hints && applyMatches(readLines(ingredients, hints), matches.data),
             title: (f.get('title') as string).trim(),
             description: initial.description,
             base_servings: Number(f.get('base_servings')),
@@ -40,13 +73,24 @@ export default function RecipeForm({
             cook_minutes: num(f, 'cook_minutes'),
             cuisine: text(f, 'cuisine'),
             meal_types: f.getAll('meal_types') as string[],
-            ingredients: f.get('ingredients') as string,
+            ingredients,
             steps: f.get('steps') as string,
             notes: text(f, 'notes'),
             source_type: initial.source_type,
             source_url: initial.source_url,
           },
-          { onSuccess: (id) => go(`#/recipes/${id}`) },
+          {
+            onSuccess: async (id) => {
+              if (importId) {
+                const { error } = await supabase
+                  .from('recipe_imports')
+                  .update({ status: 'saved', recipe_id: id })
+                  .eq('id', importId)
+                if (error) console.error('mark import saved', error) // the recipe itself is saved
+              }
+              go(`#/recipes/${id}`)
+            },
+          },
         )
       }}
     >
@@ -136,7 +180,24 @@ export default function RecipeForm({
           className={textarea}
           rows={8}
           defaultValue={initial.ingredients}
+          onBlur={(e) => setCheckedText(e.target.value)}
         />
+        {hints && matched.length > 0 && (
+          <ul aria-label="Ingredient matches" className="divide-y border-y text-sm">
+            {matched.map((l, i) => (
+              <li key={i} className="flex justify-between gap-3 py-1.5">
+                <span className="text-muted-foreground">{l.raw_text}</span>
+                {!matches.isSuccess ? null : l.isNew ? (
+                  <span className="shrink-0 text-xs font-medium tracking-widest uppercase">
+                    New ingredient
+                  </span>
+                ) : (
+                  <span className="shrink-0">{l.name}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <div className="flex flex-col gap-2">

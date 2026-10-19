@@ -1,10 +1,10 @@
 // Fetch a recipe page server-side and read its schema.org Recipe JSON-LD.
 // Signed-in users only, so the function can't be used as an open proxy.
-// TODO(v2): fall back to extract-recipe (AI) when there's no JSON-LD (M3).
+// No JSON-LD: return the page's text so the app can ask extract-recipe (AI) instead.
 import '@supabase/functions-js/edge-runtime.d.ts'
 import { withSupabase } from '@supabase/server'
 import { fetchPage, ImportError } from './guard.ts'
-import { parseRecipePage } from './recipe.ts'
+import { pageText, parseRecipePage } from './recipe.ts'
 
 const fail = (error: string, status = 400) => Response.json({ error }, { status })
 
@@ -30,7 +30,11 @@ export default {
     try {
       const page = await fetchPage(body.url.trim(), { fetch, resolve })
       const recipe = parseRecipePage(page.html, page.url)
-      return recipe ? Response.json({ recipe }) : fail('no_recipe', 422)
+      if (recipe) return Response.json({ recipe })
+      return Response.json(
+        { error: 'no_recipe', text: pageText(page.html), url: page.url },
+        { status: 422 },
+      )
     } catch (e) {
       if (e instanceof ImportError) {
         if (e.cause) console.error('import-url', e.message, e.cause)

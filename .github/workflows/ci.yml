@@ -47,8 +47,8 @@ jobs:
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with: { version: 2.120.0 }
-      # Auth, API, functions and the Mailpit inbox are needed for the magic-link flow.
-      - run: supabase start -x realtime,storage-api,imgproxy,studio,postgres-meta,logflare,vector,supavisor
+      # Auth, API, functions and the Mailpit inbox are needed for the magic-link flow; storage for screenshots.
+      - run: supabase start -x realtime,imgproxy,studio,postgres-meta,logflare,vector,supavisor
       - run: cp .env.example .env
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

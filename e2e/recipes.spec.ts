@@ -65,8 +65,8 @@ test('add a recipe from a link, review it, save it', async ({ page }) => {
   )
   await newHousehold(page, 'importer')
 
-  await page.getByRole('link', { name: 'Add from a link' }).click()
-  await page.getByLabel('Recipe link').fill(sourceUrl)
+  await page.getByRole('link', { name: 'Import a recipe' }).click()
+  await page.getByLabel('Link').fill(sourceUrl)
   await page.getByRole('button', { name: 'Get recipe' }).click()
 
   await expect(page.getByRole('heading', { name: 'Check the recipe' })).toBeVisible()
@@ -104,13 +104,136 @@ test('import errors are explained in plain language', async ({ page }) => {
     }),
   )
   await newHousehold(page, 'noimport')
-  await page.getByRole('link', { name: 'Add from a link' }).click()
-  await page.getByLabel('Recipe link').fill('https://recipes.example/blog-post')
+  await page.getByRole('link', { name: 'Import a recipe' }).click()
+  await page.getByLabel('Link').fill('https://recipes.example/blog-post')
   await page.getByRole('button', { name: 'Get recipe' }).click()
   await expect(page.getByRole('alert')).toHaveText(
-    "We couldn't find a recipe on that page. Try adding it by hand instead.",
+    "We couldn't find a recipe in that. Try pasting the caption or adding screenshots of the recipe.",
   )
-  await expect(page.getByLabel('Recipe link')).toBeVisible()
+  await expect(page.getByLabel('Link')).toBeVisible()
+})
+
+// A page without recipe data goes to the AI with its text; the daily limit is explained.
+test('a link without recipe data falls back to the AI reader', async ({ page }) => {
+  const reply = (status: number, body: object) => ({
+    status,
+    headers: {
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': '*',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  let sent: { text: string; source_url: string } | undefined
+  await page.route('**/functions/v1/import-url', (route) =>
+    route.fulfill(
+      route.request().method() === 'OPTIONS'
+        ? reply(204, {})
+        : reply(422, { error: 'no_recipe', text: "Nan's pasta: 200 g spaghetti…" }),
+    ),
+  )
+  await page.route('**/functions/v1/extract-recipe', (route) => {
+    if (route.request().method() === 'POST') sent = route.request().postDataJSON()
+    return route.fulfill(
+      route.request().method() === 'OPTIONS'
+        ? reply(204, {})
+        : reply(429, { error: 'rate_limited' }),
+    )
+  })
+  await newHousehold(page, 'fallback')
+  await page.getByRole('link', { name: 'Import a recipe' }).click()
+  await page.getByLabel('Link').fill('https://blog.example/pasta')
+  await page.getByRole('button', { name: 'Get recipe' }).click()
+  await expect(page.getByRole('alert')).toHaveText(
+    "You've used today's recipe imports for your household. Try again tomorrow, or add it by hand.",
+  )
+  expect(sent).toMatchObject({
+    text: "Nan's pasta: 200 g spaghetti…",
+    source_url: 'https://blog.example/pasta',
+  })
+})
+
+// extract-recipe needs an Anthropic key, so it's stubbed; the screenshot upload to storage is real.
+test('import a recipe from a caption and a screenshot, review the ingredient matches', async ({
+  page,
+}) => {
+  let sent: { household_id: string; text: string; image_paths: string[] } | undefined
+  await page.route('**/functions/v1/extract-recipe', (route) => {
+    if (route.request().method() === 'POST') sent = route.request().postDataJSON()
+    return route.fulfill({
+      status: route.request().method() === 'OPTIONS' ? 204 : 200,
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': '*',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        import_id: '00000000-0000-0000-0000-000000000000',
+        recipe: {
+          title: 'Tomato rice',
+          description: null,
+          base_servings: 2,
+          prep_minutes: null,
+          cook_minutes: 20,
+          cuisine: 'Korean',
+          meal_types: ['dinner'],
+          ingredients: [
+            {
+              raw_text: '2 large ripe tomatoes, diced',
+              quantity: 2,
+              unit_code: 'each',
+              name: 'tomato',
+              note: 'diced',
+            },
+            {
+              raw_text: '1 tbsp dragonfruit jam',
+              quantity: 1,
+              unit_code: 'tbsp',
+              name: 'dragonfruit jam',
+              note: null,
+            },
+          ],
+          steps: ['Cook it all.'],
+          source_type: 'instagram',
+          source_url: 'https://www.instagram.com/p/abc/',
+        },
+      }),
+    })
+  })
+  await newHousehold(page, 'ai')
+
+  await page.getByRole('link', { name: 'Import a recipe' }).click()
+  await page.getByLabel('Link').fill('https://www.instagram.com/p/abc/')
+  await page.getByLabel('Caption or recipe text').fill('Tomato rice! 2 tomatoes, gochujang…')
+  await page.getByLabel('Screenshots').setInputFiles({
+    name: 'post.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  })
+  await expect(page.getByText('post.png')).toBeVisible()
+  await page.getByRole('button', { name: 'Get recipe' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Check the recipe' })).toBeVisible()
+  expect(sent?.text).toBe('Tomato rice! 2 tomatoes, gochujang…')
+  expect(sent?.image_paths).toEqual([
+    expect.stringMatching(/^[0-9a-f-]{36}\/imports\/[0-9a-f-]{36}\.jpg$/),
+  ])
+  expect(sent?.image_paths[0].startsWith(sent!.household_id)).toBe(true)
+
+  const matches = page.getByRole('list', { name: 'Ingredient matches' })
+  await expect(matches.getByRole('listitem').nth(0)).toContainText('Tomato')
+  await expect(matches.getByRole('listitem').nth(1)).toContainText('New ingredient')
+
+  await page.getByRole('button', { name: 'Save recipe' }).click()
+  await expect(page.getByRole('heading', { name: 'Tomato rice' })).toBeVisible()
+  await expect(page.getByTestId('ingredients')).toContainText('2 large ripe tomatoes, diced')
+  await expect(page.getByRole('link', { name: 'View original recipe' })).toHaveAttribute(
+    'href',
+    'https://www.instagram.com/p/abc/',
+  )
 })
 
 // The real Edge Function, called from the app's origin: sign-in required, local addresses refused.
@@ -126,10 +249,10 @@ test('the real import-url function refuses signed-out users and local addresses'
     const key = Object.keys(localStorage).find((k) => k.endsWith('-auth-token'))!
     return JSON.parse(localStorage.getItem(key)!).access_token as string
   })
-  const call = (body: unknown, auth: boolean) =>
+  const call = (body: unknown, auth: boolean, fn = 'import-url') =>
     page.evaluate(
-      async ({ body, auth, token, anonKey }) => {
-        const res = await fetch('http://127.0.0.1:54321/functions/v1/import-url', {
+      async ({ fn, body, auth, token, anonKey }) => {
+        const res = await fetch(`http://127.0.0.1:54321/functions/v1/${fn}`, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
@@ -140,7 +263,7 @@ test('the real import-url function refuses signed-out users and local addresses'
         })
         return { status: res.status, body: await res.json().catch(() => null) }
       },
-      { body, auth, token, anonKey },
+      { fn, body, auth, token, anonKey },
     )
 
   expect((await call({ url: 'https://example.com/' }, false)).status).toBe(401)
@@ -151,5 +274,10 @@ test('the real import-url function refuses signed-out users and local addresses'
   expect(await call({ url: 'x'.repeat(2001) }, true)).toEqual({
     status: 400,
     body: { error: 'bad_url' },
+  })
+  expect((await call({ text: 'x' }, false, 'extract-recipe')).status).toBe(401)
+  expect(await call({ text: 'no household' }, true, 'extract-recipe')).toEqual({
+    status: 400,
+    body: { error: 'bad_request' },
   })
 })
