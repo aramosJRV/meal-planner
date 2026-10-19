@@ -41,7 +41,7 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 
 ## Current state
 - M0 (Scaffold) merged 2026-10-12 (PR #1). M1 (Tenancy) merged 2026-10-18 (PR #2). M2 (Recipes) merged 2026-10-19 (PR #4). Next: M3 (AI import).
-- Recipe child tables (`recipe_ingredients`, `recipe_steps`) carry `household_id` (rule 4), kept in step with the parent by a composite FK — an approved deviation from DESIGN.md §4. Recipes are saved only through `save_recipe()` (one transaction).
+- Recipe child tables (`recipe_ingredients`, `recipe_steps`) carry `household_id` (rule 4), kept in step with the parent by a composite FK — an approved deviation from DESIGN.md §4. Recipe create/edit goes through `save_recipe()` (one transaction).
 - Required checks on `main`: lint, test, build, e2e, rls. Local dev needs Docker Desktop running + `supabase start`.
 - GitHub repo is public (free accounts can't protect private branches). `main` is protected: PR only, required checks, no force-push, applies to admins.
 - Local dev only — no hosted Supabase project is linked yet.
