@@ -56,6 +56,8 @@ export default function RecipeForm({
   const matches = useQuery({ ...matchQuery(checkedText), enabled: !!hints })
   const matched = applyMatches(readLines(checkedText, hints), matches.data)
   const [matchError, setMatchError] = useState(false)
+  // Save stays disabled while the matches are checked, so a double tap can't save twice.
+  const [checking, setChecking] = useState(false)
   // The planner only suggests a recipe for the meals it suits, so at least one is needed.
   const [noMealType, setNoMealType] = useState(false)
   const text = (f: FormData, k: string) => (f.get(k) as string).trim() || null
@@ -74,12 +76,16 @@ export default function RecipeForm({
         // Review: match exactly what's being saved, even if the box changed since the last check.
         let found: Match[] | undefined
         if (hints) {
+          if (checking) return
           setMatchError(false)
+          setChecking(true)
           try {
             found = await queryClient.fetchQuery(matchQuery(ingredients))
           } catch (err) {
             console.error('match_ingredients', err)
             return setMatchError(true)
+          } finally {
+            setChecking(false)
           }
         }
         save.mutate(
@@ -250,7 +256,7 @@ export default function RecipeForm({
         />
       </div>
 
-      <Button type="submit" disabled={save.isPending}>
+      <Button type="submit" disabled={checking || save.isPending}>
         {saveLabel}
       </Button>
       {matchError && (

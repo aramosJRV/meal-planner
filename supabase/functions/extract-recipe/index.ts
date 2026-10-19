@@ -36,7 +36,8 @@ export default {
     const db = ctx.supabaseAdmin
 
     // Claimed up front so parallel requests can't exceed the limit; given back below when
-    // nothing was spent (we failed before calling Claude, or Claude refused the request).
+    // nothing was billed (we failed before calling Claude, or the API answered with an error).
+    // A refusal is not refunded: a fallback model may already have been billed.
     const { data: usageId, error: claimError } = await db.rpc('claim_ai_usage', {
       p_household_id: input.household_id,
       p_user_id: userId,
