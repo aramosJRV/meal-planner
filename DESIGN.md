@@ -114,6 +114,13 @@ Weights live in `households.planner_settings`. Pure scoring function in a shared
 - **Grocery list**: grouped by aisle, tick, add manual item, refresh from plan, offline indicator
 - **Settings**: household name, members, invite, slot config, weeknight cap
 
+### Visual style — "The Menu" (chosen 2026-10-19)
+Editorial, set like a printed menu. Mockups: https://claude.ai/artifact/J9v8RCAUT22LW2ASxUUPQS (row D).
+- **Type**: Instrument Serif (display, titles, recipe names, big numbers; italic for accents and empty states) + Instrument Sans (body, labels, buttons). Small labels are uppercase, letter-spaced 0.12–0.16em.
+- **Colour**: paper `#FBFAF7`, ink `#161412`, muted `#6B655E`, hairlines `#DEDAD3`, one accent red `#B3261E` (today, locks, section labels). No other accent colours.
+- **Shape**: no cards, no shadows, square corners. Structure comes from hairline rules (1.5px ink rule to open a section, 1px rules between rows). Text-only bottom nav with a red underline on the active tab. One solid ink button per screen as the main action.
+- **Copy**: warm and plain ("Nothing yet", "You'll need", "Start cooking"), Australian English.
+
 ## 11. Build milestones
 Each milestone ends with tests passing and a working build. Merge to `main` on green CI + independent reviewer approval; releases and migrations need human approval (see CLAUDE.md).
 - **M0 Scaffold** — Vite React TS + Tailwind + shadcn, Capacitor iOS/Android, Supabase project + local dev, migration tooling, lint/test/CI
