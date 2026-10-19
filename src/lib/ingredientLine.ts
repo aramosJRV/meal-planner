@@ -49,6 +49,8 @@ function amount(s: string): number {
   return (v[1] ? +v[1] : 0) + (v[2] ? VULGAR[v[2]] : 0)
 }
 
+const IMPERIAL = /^(oz|ounces?|lbs?|pounds?)$/i
+
 const TRAILING_NOTES = /\s*\b(to taste|to serve|for serving|for garnish|as needed|optional)\s*$/i
 const SIZE_WORDS = /^(large|small|medium|fresh)\s+/i
 
@@ -94,6 +96,11 @@ export function parseIngredientLine(raw: string): ParsedLine {
     const code = word && UNIT_ALIASES[word[1].toLowerCase()]
     if (code) {
       unit_code = code
+      rest = rest.slice(word[0].length).replace(/^of\s+/i, '')
+    } else if (word && IMPERIAL.test(word[1])) {
+      // shortcut: no imperial units in the units table, so keep the name clean and leave the
+      // amount unscaled (raw_text has it). Add oz/lb to the seed if US recipes are common.
+      quantity = 0
       rest = rest.slice(word[0].length).replace(/^of\s+/i, '')
     } else {
       unit_code = 'each'

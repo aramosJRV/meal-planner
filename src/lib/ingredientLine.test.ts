@@ -17,6 +17,8 @@ test.each([
   ['Coriander, to serve', null, null, 'Coriander', 'to serve'],
   ['2 Tablespoons sugar', 2, 'tbsp', 'sugar', null],
   ['1 lemon', 1, 'each', 'lemon', null],
+  ['1 lb beef mince', null, null, 'beef mince', null],
+  ['8 oz cheddar', null, null, 'cheddar', null],
 ])('%s', (raw, quantity, unit_code, name, note) => {
   expect(p(raw)).toEqual({ raw_text: raw, quantity, unit_code, name, note })
 })

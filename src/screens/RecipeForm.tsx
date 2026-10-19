@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +17,8 @@ export default function RecipeForm({
   saveLabel = 'Save recipe',
 }: Props) {
   const save = useSaveRecipe(householdId, recipeId)
+  // The planner only suggests a recipe for the meals it suits, so at least one is needed.
+  const [noMealType, setNoMealType] = useState(false)
   const text = (f: FormData, k: string) => (f.get(k) as string).trim() || null
   const num = (f: FormData, k: string) => (f.get(k) === '' ? null : Number(f.get(k)))
 
@@ -24,6 +27,9 @@ export default function RecipeForm({
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault()
+        const types = new FormData(e.currentTarget).getAll('meal_types')
+        setNoMealType(!types.length)
+        if (!types.length) return
         const f = new FormData(e.currentTarget)
         save.mutate(
           {
@@ -112,6 +118,11 @@ export default function RecipeForm({
             </label>
           ))}
         </div>
+        {noMealType && (
+          <p role="alert" className="text-destructive text-sm">
+            Tick at least one meal this recipe suits.
+          </p>
+        )}
       </fieldset>
 
       <div className="flex flex-col gap-2">
