@@ -34,6 +34,29 @@ Sign-in uses an email magic link. Locally, no real email is sent — Supabase ca
 
 Sign in with Apple and Google are set up in `supabase/config.toml` but switched off until real credentials exist (see the `env(...)` placeholders there).
 
+## Recipes and seed data
+
+The database comes with read-only reference data, added by migration `20261020000001_recipe_seed.sql` (so it exists everywhere, not just locally):
+
+- **Units**: g, kg, ml, l, tsp, tbsp, cup, each, clove, pinch. Australian measures: 1 tbsp = 20 ml, 1 cup = 250 ml. Amounts convert only within one kind of unit (weight to weight, volume to volume). Clove and pinch never convert.
+- **About 340 common ingredients** with Australian names (capsicum, coriander, zucchini), a supermarket aisle and a "pantry staple" flag. Their matching names come from `canonicalName()` in `src/lib/ingredientLine.ts`, so regenerate the list with that function if you change it.
+
+When a recipe is saved, each ingredient line is matched to an ingredient by exact name (after lower-casing and making the last word singular). If nothing matches, a new ingredient is created for that household only.
+
+## Importing a recipe from a link
+
+The `import-url` Edge Function fetches a recipe page on the server and reads its schema.org Recipe data (JSON-LD). It only opens public `http`/`https` pages on the normal ports. It refuses private and local network addresses, including after redirects, and stops at 2 MB or 10 seconds. It runs automatically with `supabase start`. If you add or rename a function, restart with `supabase stop && supabase start`.
+
+To try it from the command line you need a signed-in user's access token (in the app, copy it from the browser's local storage):
+
+```bash
+curl -X POST http://127.0.0.1:54321/functions/v1/import-url \
+  -H "Authorization: Bearer <access token>" -H "Content-Type: application/json" \
+  -d '{"url": "https://www.example.com/some-recipe"}'
+```
+
+Because it refuses local addresses, it can't read a page served from your own computer. The automated tests use the sample page in `e2e/fixtures/recipe-page.html` instead.
+
 ## Scripts
 
 | Command                    | What it does                                        |

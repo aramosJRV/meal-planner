@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import Screen from './Screen'
 
@@ -45,6 +45,9 @@ export default function Home({ household, userId }: Props) {
   return (
     <Screen title={household.name}>
       <p className="text-muted-foreground">Your week's meals will appear here.</p>
+      <a href="#/recipes" className={buttonVariants()}>
+        Recipes
+      </a>
 
       {role.isError && (
         <p role="alert" className="text-destructive text-sm">
