@@ -106,6 +106,8 @@ export function userContent(input: Input, images: string[]) {
   ]
     .filter(Boolean)
     .join('\n\n')
+    // Shared text can't close the wrapper early and pose as instructions after it.
+    .replace(/<\/?shared_material>/gi, '')
   return [
     ...images.map((data) => ({
       type: 'image' as const,

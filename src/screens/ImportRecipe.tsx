@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query'
-import { FunctionsHttpError } from '@supabase/supabase-js'
+import { FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +30,7 @@ const importErrors: Record<string, string> = {
     "You've used today's recipe imports for your household. Try again tomorrow, or add it by hand.",
   ai_failed: "The recipe reader isn't working right now. Try again in a minute.",
   image_missing: "One of the screenshots didn't upload. Try again.",
+  forbidden: "You're no longer in this household. Close and reopen the app.",
 }
 
 class ImportFailed extends Error {
@@ -50,6 +51,8 @@ async function call(name: string, body: object) {
     const failure = await error.context.json().catch(() => ({}))
     throw new ImportFailed(failure.error, failure)
   }
+  if (error instanceof FunctionsRelayError)
+    throw new Error('That took too long. Try again, or paste the recipe text instead.')
   if (error) throw new Error("Couldn't reach the server. Check your connection and try again.")
   return data
 }
@@ -178,6 +181,13 @@ function ImportForm({ householdId, shared }: { householdId: string; shared: Shar
         Paste a link, the caption from a post, or add screenshots of the recipe. You can use any
         mix.
       </p>
+      {!!shared?.lost && (
+        <p role="status" className="text-sm">
+          {shared.lost === 1
+            ? "One shared image couldn't be opened. Add it again below."
+            : `${shared.lost} shared images couldn't be opened. Add them again below.`}
+        </p>
+      )}
       <form
         className="flex flex-col gap-4"
         onSubmit={(e) => {

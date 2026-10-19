@@ -3,6 +3,31 @@ import { readFileSync } from 'node:fs'
 import { parseRecipePage } from '../supabase/functions/import-url/recipe.ts'
 import { signIn } from './auth.ts'
 
+const anonKey = readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
+  .match(/VITE_SUPABASE_ANON_KEY=(.+)/)![1]
+  .trim()
+
+// Calls the local Supabase API as the signed-in user (REST paths, or functions/v1/<name>).
+async function api(page: Page, path: string, body?: unknown) {
+  return page.evaluate(
+    async ({ path, body, anonKey }) => {
+      const key = Object.keys(localStorage).find((k) => k.endsWith('-auth-token'))!
+      const token = JSON.parse(localStorage.getItem(key)!).access_token as string
+      const res = await fetch(`http://127.0.0.1:54321/${path}`, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: {
+          'content-type': 'application/json',
+          apikey: anonKey,
+          authorization: `Bearer ${token}`,
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      return { status: res.status, body: await res.json().catch(() => null) }
+    },
+    { path, body, anonKey },
+  )
+}
+
 async function newHousehold(page: Page, tag: string) {
   const run = `${tag}-${Date.now()}`
   await signIn(page, `${run}@test.local`)
@@ -227,9 +252,30 @@ test('import a recipe from a caption and a screenshot, review the ingredient mat
   await expect(matches.getByRole('listitem').nth(0)).toContainText('Tomato')
   await expect(matches.getByRole('listitem').nth(1)).toContainText('New ingredient')
 
+  // Add a line and save straight away: the save must still use the (fuzzy) match.
+  const ingredients = page.getByLabel('Ingredients')
+  await ingredients.fill(`${await ingredients.inputValue()}\n500 g chicken thigh fillet`)
   await page.getByRole('button', { name: 'Save recipe' }).click()
   await expect(page.getByRole('heading', { name: 'Tomato rice' })).toBeVisible()
   await expect(page.getByTestId('ingredients')).toContainText('2 large ripe tomatoes, diced')
+  const saved = await api(
+    page,
+    'rest/v1/recipe_ingredients?select=raw_text,ingredients(canonical_name,household_id)&order=position',
+  )
+  expect(saved.body).toEqual([
+    {
+      raw_text: '2 large ripe tomatoes, diced',
+      ingredients: { canonical_name: 'tomato', household_id: null },
+    },
+    {
+      raw_text: '1 tbsp dragonfruit jam',
+      ingredients: { canonical_name: 'dragonfruit jam', household_id: expect.any(String) },
+    },
+    {
+      raw_text: '500 g chicken thigh fillet',
+      ingredients: { canonical_name: 'chicken thigh', household_id: null },
+    },
+  ])
   await expect(page.getByRole('link', { name: 'View original recipe' })).toHaveAttribute(
     'href',
     'https://www.instagram.com/p/abc/',
@@ -240,9 +286,6 @@ test('import a recipe from a caption and a screenshot, review the ingredient mat
 test('the real import-url function refuses signed-out users and local addresses', async ({
   page,
 }) => {
-  const anonKey = readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
-    .match(/VITE_SUPABASE_ANON_KEY=(.+)/)![1]
-    .trim()
   await signIn(page, `guard-${Date.now()}@test.local`)
   await expect(page.getByRole('heading', { name: 'Set up your household' })).toBeVisible()
   const token = await page.evaluate(() => {
@@ -280,4 +323,30 @@ test('the real import-url function refuses signed-out users and local addresses'
     status: 400,
     body: { error: 'bad_request' },
   })
+})
+
+// The real extract-recipe, with a fake key and an unreachable AI address (set by CI in
+// supabase/functions/.env, see ci.yml), so nothing is sent to Anthropic.
+test('the real extract-recipe checks membership, records failures and enforces the daily limit', async ({
+  page,
+}) => {
+  test.skip(!process.env.E2E_FAKE_AI, 'needs the fake AI settings in supabase/functions/.env')
+  await newHousehold(page, 'limit')
+  const [{ id }] = (await api(page, 'rest/v1/households?select=id')).body as { id: string }[]
+  const extract = (household_id: string) =>
+    api(page, 'functions/v1/extract-recipe', { household_id, text: 'Pasta: 200 g spaghetti' })
+
+  expect(await extract('11111111-1111-1111-1111-111111111111')).toEqual({
+    status: 403,
+    body: { error: 'forbidden' },
+  })
+  expect(await extract(id)).toEqual({ status: 502, body: { error: 'ai_failed' } })
+  expect((await api(page, 'rest/v1/recipe_imports?select=status,error')).body).toEqual([
+    { status: 'failed', error: 'ai_failed:network' },
+  ])
+  // An unreachable AI may still have been billed, so the call counts towards the limit (2 in CI).
+  expect((await extract(id)).status).toBe(502)
+  expect(await extract(id)).toEqual({ status: 429, body: { error: 'rate_limited' } })
+  expect((await api(page, 'rest/v1/ai_usage?select=id')).body).toHaveLength(2)
+  expect((await api(page, 'rest/v1/recipe_imports?select=id')).body).toHaveLength(2)
 })

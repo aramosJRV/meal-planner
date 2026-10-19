@@ -1,9 +1,9 @@
-import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { applyMatches, type Hint, readLines } from '@/lib/importLines'
+import { applyMatches, type Hint, type Match, readLines } from '@/lib/importLines'
 import { supabase } from '@/lib/supabase'
 import { type Draft, go, MEAL_TYPES, useSaveRecipe } from './recipeData'
 
@@ -30,23 +30,32 @@ export default function RecipeForm({
   importId,
 }: Props) {
   const save = useSaveRecipe(householdId, recipeId)
-  // Import review only: match lines to existing ingredients, refreshed when the box loses focus.
+  const queryClient = useQueryClient()
+  // Import review only: match lines to existing ingredients, refreshed shortly after typing stops
+  // (not on blur: the list changing height then would move the Save button mid-tap).
+  const matchQuery = (text: string) => {
+    const names = [...new Set(readLines(text, hints).map((l) => l.canonical_name))]
+    return {
+      queryKey: ['match_ingredients', householdId, names],
+      queryFn: async () => {
+        const { data, error } = await supabase.rpc('match_ingredients', {
+          p_household_id: householdId,
+          p_names: names,
+        })
+        if (error) throw error
+        return data as Match[]
+      },
+    }
+  }
+  const [ingredientsText, setIngredientsText] = useState(initial.ingredients)
   const [checkedText, setCheckedText] = useState(initial.ingredients)
-  const checkedLines = readLines(checkedText, hints)
-  const names = [...new Set(checkedLines.map((l) => l.canonical_name))]
-  const matches = useQuery({
-    queryKey: ['match_ingredients', householdId, names],
-    enabled: !!hints && names.length > 0,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('match_ingredients', {
-        p_household_id: householdId,
-        p_names: names,
-      })
-      if (error) throw error
-      return data as { query: string; name: string | null; canonical_name: string | null }[]
-    },
-  })
-  const matched = applyMatches(checkedLines, matches.data)
+  useEffect(() => {
+    const t = setTimeout(() => setCheckedText(ingredientsText), 500)
+    return () => clearTimeout(t)
+  }, [ingredientsText])
+  const matches = useQuery({ ...matchQuery(checkedText), enabled: !!hints })
+  const matched = applyMatches(readLines(checkedText, hints), matches.data)
+  const [matchError, setMatchError] = useState(false)
   // The planner only suggests a recipe for the meals it suits, so at least one is needed.
   const [noMealType, setNoMealType] = useState(false)
   const text = (f: FormData, k: string) => (f.get(k) as string).trim() || null
@@ -55,17 +64,28 @@ export default function RecipeForm({
   return (
     <form
       className="flex flex-col gap-4"
-      onSubmit={(e) => {
+      onSubmit={async (e) => {
         e.preventDefault()
         const types = new FormData(e.currentTarget).getAll('meal_types')
         setNoMealType(!types.length)
         if (!types.length) return
         const f = new FormData(e.currentTarget)
         const ingredients = f.get('ingredients') as string
+        // Review: match exactly what's being saved, even if the box changed since the last check.
+        let found: Match[] | undefined
+        if (hints) {
+          setMatchError(false)
+          try {
+            found = await queryClient.fetchQuery(matchQuery(ingredients))
+          } catch (err) {
+            console.error('match_ingredients', err)
+            return setMatchError(true)
+          }
+        }
         save.mutate(
           {
             // Review: save with the AI reading and the matches shown (unmatched → new ingredient).
-            lines: hints && applyMatches(readLines(ingredients, hints), matches.data),
+            lines: hints && applyMatches(readLines(ingredients, hints), found),
             title: (f.get('title') as string).trim(),
             description: initial.description,
             base_servings: Number(f.get('base_servings')),
@@ -86,6 +106,8 @@ export default function RecipeForm({
                   .from('recipe_imports')
                   .update({ status: 'saved', recipe_id: id })
                   .eq('id', importId)
+                  .select('id')
+                  .single()
                 if (error) console.error('mark import saved', error) // the recipe itself is saved
               }
               go(`#/recipes/${id}`)
@@ -180,8 +202,13 @@ export default function RecipeForm({
           className={textarea}
           rows={8}
           defaultValue={initial.ingredients}
-          onBlur={(e) => setCheckedText(e.target.value)}
+          onChange={(e) => setIngredientsText(e.target.value)}
         />
+        {hints && matches.isError && (
+          <p role="alert" className="text-destructive text-sm">
+            Couldn't check these against your ingredients. Saving will try again.
+          </p>
+        )}
         {hints && matched.length > 0 && (
           <ul aria-label="Ingredient matches" className="divide-y border-y text-sm">
             {matched.map((l, i) => (
@@ -226,6 +253,11 @@ export default function RecipeForm({
       <Button type="submit" disabled={save.isPending}>
         {saveLabel}
       </Button>
+      {matchError && (
+        <p role="alert" className="text-destructive text-sm">
+          Couldn't check the ingredients. Check your connection and try again.
+        </p>
+      )}
       {save.isError && (
         <p role="alert" className="text-destructive text-sm">
           {(save.error as { code?: string }).code === '23514'

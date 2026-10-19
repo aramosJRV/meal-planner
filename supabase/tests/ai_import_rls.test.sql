@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B; plus a signed-out user.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(36);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local'),
@@ -99,6 +99,8 @@ select is((select ingredient_id from public.match_ingredients(pg_temp.v('ha'), '
   'never matches another household''s ingredients');
 select is((select count(*)::int from public.match_ingredients(pg_temp.v('ha'), '{garlic,onion,zzz}')), 3,
   'one row per name asked');
+select is((select ingredient_id from public.match_ingredients(pg_temp.v('hb'), '{secret sauce}')), null,
+  'passing another household''s id still cannot reveal its ingredients');
 
 -- ── recipe-media storage ─────────────────────────────────────────────────
 select lives_ok(format($$ insert into storage.objects (bucket_id, name) values ('recipe-media', '%s/imports/a.jpg') $$, pg_temp.v('ha')),
@@ -117,6 +119,8 @@ select is((select count(*)::int from storage.objects where bucket_id = 'recipe-m
 reset role;
 set local role anon;
 select throws_ok('select * from public.recipe_imports', '42501', null, 'signed-out users cannot read imports');
+select throws_ok($$ select * from public.match_ingredients(current_setting('test.ha')::uuid, '{garlic}') $$,
+  '42501', null, 'signed-out users cannot match ingredients');
 reset role;
 
 select * from finish();

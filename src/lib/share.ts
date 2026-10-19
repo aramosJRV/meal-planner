@@ -4,7 +4,8 @@ import { Capacitor } from '@capacitor/core'
 import { CapacitorShareTarget, type ShareReceivedEvent } from '@capgo/capacitor-share-target'
 import { useSyncExternalStore } from 'react'
 
-export type Shared = { id: number; url: string | null; text: string; files: File[] }
+// lost: shared images that couldn't be read, so the import screen can say so.
+export type Shared = { id: number; url: string | null; text: string; files: File[]; lost: number }
 
 let current: Shared | null = null
 const listeners = new Set<() => void>()
@@ -22,16 +23,21 @@ export function readTexts(texts: string[]): Pick<Shared, 'url' | 'text'> {
 
 async function receive(event: ShareReceivedEvent) {
   const images = (event.files ?? []).filter((f) => f.mimeType?.startsWith('image/')).slice(0, 5)
-  const files = await Promise.all(
+  const results = await Promise.allSettled(
     images.map(async (f) => {
       const res = await fetch(Capacitor.convertFileSrc(f.uri))
+      if (!res.ok) throw new Error(`share: read ${f.name}: ${res.status}`)
       return new File([await res.blob()], f.name, { type: f.mimeType })
     }),
-  ).catch((e) => {
-    console.error('share: read files', e)
-    return [] // still open the import screen with the text; the user can add screenshots
+  )
+  const files = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
+  results.forEach((r) => r.status === 'rejected' && console.error(r.reason))
+  set({
+    id: Date.now(),
+    ...readTexts(event.texts ?? []),
+    files,
+    lost: results.length - files.length,
   })
-  set({ id: Date.now(), ...readTexts(event.texts ?? []), files })
   window.location.hash = '#/recipes/import'
 }
 
@@ -41,7 +47,9 @@ if (Capacitor.isNativePlatform()) {
   )
 }
 
-export const clearShare = () => set(null)
+// Keeps the id so the import screen (keyed on it) doesn't restart and lose its result.
+export const clearShare = () =>
+  current && set({ ...current, url: null, text: '', files: [], lost: 0 })
 
 export function useShared() {
   return useSyncExternalStore(

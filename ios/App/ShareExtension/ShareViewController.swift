@@ -23,7 +23,7 @@ class ShareViewController: UIViewController {
 
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier), files.count < maxImages {
-                if let file = await copyImage(provider) { files.append(file) }
+                if let file = await copyImage(provider) { files.append(file) } else { NSLog("ShareExtension: couldn't copy a shared image") }
             } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
                       let url = try? await provider.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
                 texts.append(url.absoluteString)
@@ -46,12 +46,18 @@ class ShareViewController: UIViewController {
 
     // The shared file is only readable during this call, so copy it into the shared container.
     private func copyImage(_ provider: NSItemProvider) async -> [String: String]? {
-        guard let container = sharedFolder() else { return nil }
+        guard let container = sharedFolder() else {
+            NSLog("ShareExtension: no App Group container for %@ (check entitlements)", appGroupId)
+            return nil
+        }
         try? FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
 
         return await withCheckedContinuation { done in
-            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, _ in
-                guard let url else { return done.resume(returning: nil) }
+            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { url, error in
+                guard let url else {
+                    NSLog("ShareExtension: image load failed: %@", String(describing: error))
+                    return done.resume(returning: nil)
+                }
                 let type = UTType(filenameExtension: url.pathExtension) ?? .jpeg
                 let dest = container.appendingPathComponent("\(UUID().uuidString).\(url.pathExtension)")
                 do {
@@ -62,6 +68,7 @@ class ShareViewController: UIViewController {
                         "mimeType": type.preferredMIMEType ?? "image/jpeg",
                     ])
                 } catch {
+                    NSLog("ShareExtension: copy failed: %@", error.localizedDescription)
                     done.resume(returning: nil)
                 }
             }
