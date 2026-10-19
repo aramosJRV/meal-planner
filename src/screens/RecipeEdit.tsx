@@ -10,7 +10,9 @@ export default function RecipeEdit({ id, householdId }: { id: string; householdI
     return (
       <Screen title="Edit recipe" back="#/recipes">
         <p role="alert" className="text-destructive text-sm">
-          Couldn't load this recipe. Please try again.
+          {recipe.isError
+            ? "Couldn't load this recipe. Please try again."
+            : 'This recipe no longer exists.'}
         </p>
       </Screen>
     )

@@ -156,7 +156,9 @@ export default function RecipeForm({
       </Button>
       {save.isError && (
         <p role="alert" className="text-destructive text-sm">
-          Couldn't save the recipe. Check your connection and try again.
+          {(save.error as { code?: string }).code === '23514'
+            ? 'Something in this recipe is too long. Ingredient lines can be up to 500 characters.'
+            : "Couldn't save the recipe. Check your connection and try again."}
         </p>
       )}
     </form>

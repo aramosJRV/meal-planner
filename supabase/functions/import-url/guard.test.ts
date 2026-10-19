@@ -27,6 +27,8 @@ test.each([
   '2002:c0a8:0101::1',
   'not-an-ip',
   '1:2:3',
+  '2001:0::1',
+  '2001:db8::1',
 ])('blocks %s', (ip) => {
   expect(isBlockedIp(ip)).toBe(true)
 })
@@ -164,4 +166,29 @@ test('enforces size, type, status and timeout limits', async () => {
       ),
     ),
   ).toBe('bad_url')
+})
+
+test('a failed name lookup is a load failure, not a blocked link, and keeps its cause', async () => {
+  const lookupFails = async () => {
+    throw new Error('NXDOMAIN')
+  }
+  const err = await fetchPage(
+    'https://typo.example/',
+    { fetch, resolve: lookupFails },
+    limits,
+  ).catch((e: ImportError) => e)
+  expect(err).toBeInstanceOf(ImportError)
+  expect((err as ImportError).message).toBe('fetch_failed')
+  expect(((err as ImportError).cause as Error).message).toBe('NXDOMAIN')
+})
+
+test('a redirect to a non-web scheme is blocked', async () => {
+  const fetch = (async () =>
+    new Response(null, {
+      status: 302,
+      headers: { location: 'file:///etc/passwd' },
+    })) as typeof globalThis.fetch
+  expect(await code(fetchPage('https://example.com/', { fetch, resolve: publicDns }, limits))).toBe(
+    'blocked_url',
+  )
 })

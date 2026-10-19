@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B; plus a signed-out user.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(46);
+select plan(54);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local'),
@@ -117,6 +117,14 @@ delete from public.recipes where id = pg_temp.v('ra');
 select throws_ok($$ insert into public.recipe_steps (recipe_id, household_id, position, text)
   values (current_setting('test.ra')::uuid, current_setting('test.ha')::uuid, 9, 'Planted step') $$,
   '42501', null, 'household B cannot add steps to household A recipe');
+select throws_ok($$ insert into public.recipe_ingredients (recipe_id, household_id, ingredient_id, raw_text, position)
+  values (current_setting('test.ra')::uuid, current_setting('test.ha')::uuid,
+    (select id from public.ingredients where canonical_name = 'garlic' and household_id is null), 'planted', 9) $$,
+  '42501', null, 'household B cannot add lines to household A recipe');
+select throws_ok($$ insert into public.recipe_ingredients (recipe_id, household_id, ingredient_id, raw_text, position)
+  values (current_setting('test.ra')::uuid, current_setting('test.hb')::uuid,
+    (select id from public.ingredients where canonical_name = 'garlic' and household_id is null), 'planted', 9) $$,
+  '23503', null, 'a line cannot claim a different household than its recipe');
 select throws_ok($$ insert into public.recipe_steps (recipe_id, household_id, position, text)
   values (current_setting('test.ra')::uuid, current_setting('test.hb')::uuid, 9, 'Planted step') $$,
   '23503', null, 'a step cannot claim a different household than its recipe');
@@ -138,6 +146,20 @@ select throws_ok($$ insert into public.recipes (household_id, title, created_by)
   '42501', null, 'apps cannot set created_by');
 select throws_ok($$ update public.recipes set household_id = current_setting('test.hb')::uuid $$,
   '42501', null, 'apps cannot move a recipe to another household');
+select throws_ok($$ update public.ingredients set household_id = null where id = current_setting('test.ia')::uuid $$,
+  '42501', null, 'apps cannot make a household ingredient global');
+select throws_ok($$ update public.ingredients set household_id = current_setting('test.hb')::uuid
+  where id = current_setting('test.ia')::uuid $$, '42501', null, 'apps cannot move an ingredient to another household');
+select throws_ok($$ select public.save_recipe(current_setting('test.ha')::uuid, current_setting('test.ra')::uuid,
+  '{"title": "Broken edit"}',
+  '[{"raw_text": "1 bogus thing", "name": "thing", "canonical_name": "thing", "quantity": 1, "unit_code": "bogus"}]',
+  array['Lost step']) $$, '23503', null, 'an edit with a bad line fails');
+reset role;
+select is((select title || ' / ' || (select count(*) from public.recipe_ingredients where recipe_id = r.id)
+    || ' lines / ' || (select count(*) from public.recipe_steps where recipe_id = r.id) || ' steps'
+  from public.recipes r where id = pg_temp.v('ra')), 'Garlic prawns v2 / 2 lines / 1 steps',
+  'a failed edit leaves the recipe, its lines and steps untouched');
+select pg_temp.login('00000000-0000-0000-0000-00000000000a');
 select throws_ok($$ update public.recipe_steps set text = 'edited' $$, '42501', null,
   'steps are replaced, never edited in place');
 
@@ -157,6 +179,10 @@ select throws_ok('select * from public.ingredients', '42501', null, 'signed-out 
 select throws_ok('select * from public.recipes', '42501', null, 'signed-out users cannot read recipes');
 select throws_ok('select * from public.recipe_ingredients', '42501', null, 'signed-out users cannot read recipe lines');
 select throws_ok('select * from public.recipe_steps', '42501', null, 'signed-out users cannot read steps');
+select throws_ok($$ select public.save_recipe(current_setting('test.ha')::uuid, null, '{"title": "x"}', '[]', '{}') $$,
+  '42501', null, 'signed-out users cannot call save_recipe');
+select throws_ok($$ insert into public.recipes (household_id, title) values (current_setting('test.ha')::uuid, 'x') $$,
+  '42501', null, 'signed-out users cannot add recipes');
 reset role;
 
 -- ── timestamps ───────────────────────────────────────────────────────────

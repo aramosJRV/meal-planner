@@ -121,7 +121,10 @@ export function useSaveRecipe(householdId: string, recipeId?: string) {
         }),
         p_steps: lines(steps),
       })
-      if (error) throw error
+      if (error) {
+        console.error('save_recipe', error)
+        throw error
+      }
       return data as string
     },
     onSuccess: (id) => {

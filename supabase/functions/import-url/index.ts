@@ -8,10 +8,20 @@ import { parseRecipePage } from './recipe.ts'
 
 const fail = (error: string, status = 400) => Response.json({ error }, { status })
 
-const resolve = async (host: string) =>
-  (await Promise.allSettled([Deno.resolveDns(host, 'A'), Deno.resolveDns(host, 'AAAA')])).flatMap(
-    (r) => (r.status === 'fulfilled' ? r.value : []),
-  )
+// A name with only A or only AAAA records is fine; if both lookups fail, the name can't be reached.
+async function resolve(host: string) {
+  const results = await Promise.allSettled([
+    Deno.resolveDns(host, 'A'),
+    Deno.resolveDns(host, 'AAAA'),
+  ])
+  if (results.every((r) => r.status === 'rejected')) {
+    throw new AggregateError(
+      results.map((r) => (r as PromiseRejectedResult).reason),
+      `DNS lookup failed for ${host}`,
+    )
+  }
+  return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+}
 
 export default {
   fetch: withSupabase({ auth: 'user' }, async (req) => {
@@ -22,7 +32,10 @@ export default {
       const recipe = parseRecipePage(page.html, page.url)
       return recipe ? Response.json({ recipe }) : fail('no_recipe', 422)
     } catch (e) {
-      if (e instanceof ImportError) return fail(e.message, 422)
+      if (e instanceof ImportError) {
+        if (e.cause) console.error('import-url', e.message, e.cause)
+        return fail(e.message, 422)
+      }
       console.error('import-url', e)
       return fail('server_error', 500)
     }

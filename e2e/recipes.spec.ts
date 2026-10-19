@@ -90,3 +90,66 @@ test('add a recipe from a link, review it, save it', async ({ page }) => {
   await page.getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByText('No recipes yet.')).toBeVisible()
 })
+
+test('import errors are explained in plain language', async ({ page }) => {
+  await page.route('**/functions/v1/import-url', (route) =>
+    route.fulfill({
+      status: route.request().method() === 'OPTIONS' ? 204 : 422,
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': '*',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ error: 'no_recipe' }),
+    }),
+  )
+  await newHousehold(page, 'noimport')
+  await page.getByRole('link', { name: 'Add from a link' }).click()
+  await page.getByLabel('Recipe link').fill('https://recipes.example/blog-post')
+  await page.getByRole('button', { name: 'Get recipe' }).click()
+  await expect(page.getByRole('alert')).toHaveText(
+    "We couldn't find a recipe on that page. Try adding it by hand instead.",
+  )
+  await expect(page.getByLabel('Recipe link')).toBeVisible()
+})
+
+// The real Edge Function, called from the app's origin: sign-in required, local addresses refused.
+test('the real import-url function refuses signed-out users and local addresses', async ({
+  page,
+}) => {
+  const anonKey = readFileSync(new URL('../.env.example', import.meta.url), 'utf8')
+    .match(/VITE_SUPABASE_ANON_KEY=(.+)/)![1]
+    .trim()
+  await signIn(page, `guard-${Date.now()}@test.local`)
+  await expect(page.getByRole('heading', { name: 'Set up your household' })).toBeVisible()
+  const token = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.endsWith('-auth-token'))!
+    return JSON.parse(localStorage.getItem(key)!).access_token as string
+  })
+  const call = (body: unknown, auth: boolean) =>
+    page.evaluate(
+      async ({ body, auth, token, anonKey }) => {
+        const res = await fetch('http://127.0.0.1:54321/functions/v1/import-url', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            apikey: anonKey,
+            ...(auth ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(body),
+        })
+        return { status: res.status, body: await res.json().catch(() => null) }
+      },
+      { body, auth, token, anonKey },
+    )
+
+  expect((await call({ url: 'https://example.com/' }, false)).status).toBe(401)
+  expect(await call({ url: 'http://127.0.0.1:54321/' }, true)).toEqual({
+    status: 422,
+    body: { error: 'blocked_url' },
+  })
+  expect(await call({ url: 'x'.repeat(2001) }, true)).toEqual({
+    status: 400,
+    body: { error: 'bad_url' },
+  })
+})

@@ -107,7 +107,8 @@ export function parseIngredientLine(raw: string): ParsedLine {
     rest = rest.slice(size[0].length)
   }
 
-  const name = rest.trim() || raw_text
+  // The database keeps ingredient names to 100 characters; raw_text keeps the whole line.
+  const name = (rest.trim() || raw_text).slice(0, 100).trim()
   const note = notes.filter(Boolean).join(', ')
   return {
     raw_text,

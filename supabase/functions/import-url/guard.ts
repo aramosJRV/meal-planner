@@ -87,6 +87,7 @@ export function isBlockedIp(ip: string): boolean {
   )
 }
 
+// Throws when the name can't be looked up at all (typo, resolver down).
 export type Resolve = (host: string) => Promise<string[]>
 
 // null = OK to fetch. Every address the name resolves to must be public.
@@ -163,6 +164,7 @@ export async function fetchPage(
   } catch (e) {
     if (e instanceof ImportError) throw e
     if (signal.aborted) throw new ImportError('timeout')
-    throw new ImportError('fetch_failed')
+    // Unexpected (TLS, refused connection, failed name lookup, a bug): keep the cause for the logs.
+    throw new ImportError('fetch_failed', { cause: e })
   }
 }

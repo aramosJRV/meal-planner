@@ -48,3 +48,10 @@ test.each([
 ])('canonical %s → %s', (name, canonical) => {
   expect(canonicalName(name)).toBe(canonical)
 })
+
+test('ingredient names are capped at 100 characters, raw text is not', () => {
+  const raw = `2 cups ${'very '.repeat(40)}long stock`
+  const line = p(raw)
+  expect(line.name.length).toBeLessThanOrEqual(100)
+  expect(line.raw_text).toBe(raw)
+})

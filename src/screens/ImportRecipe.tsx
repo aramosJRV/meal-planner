@@ -36,11 +36,13 @@ export default function ImportRecipe({ householdId }: { householdId: string }) {
   const fetchRecipe = useMutation({
     mutationFn: async (url: string): Promise<Draft> => {
       const { data, error } = await supabase.functions.invoke('import-url', { body: { url } })
+      if (error) console.error('import-url', error)
       if (error instanceof FunctionsHttpError) {
+        if (error.context.status === 401) throw new Error('Please sign out and sign in again.')
         const { error: reason } = await error.context.json().catch(() => ({}))
         throw new Error(importErrors[reason] ?? 'Something went wrong. Please try again.')
       }
-      if (error) throw new Error('Something went wrong. Please try again.')
+      if (error) throw new Error("Couldn't reach the server. Check your connection and try again.")
       const r = data.recipe as Imported
       return {
         ...emptyDraft,
