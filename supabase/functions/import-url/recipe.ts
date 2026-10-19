@@ -46,7 +46,14 @@ export function findRecipeNode(html: string): Node | null {
   return null
 }
 
-const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
+const ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+}
 
 // Plain text only: strip tags, decode entities, tidy whitespace, cap length.
 export function clean(value: unknown, max: number): string {
@@ -55,7 +62,8 @@ export function clean(value: unknown, max: number): string {
     .replace(/<[^>]*>/g, ' ')
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) => {
       if (e[0] !== '#') return ENTITIES[e.toLowerCase()] ?? m
-      const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)
+      const code =
+        e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)
       return code > 0 && code < 0x110000 ? String.fromCodePoint(code) : ''
     })
     .replace(/\s+/g, ' ')
@@ -66,7 +74,8 @@ export function clean(value: unknown, max: number): string {
 const first = (v: unknown) => (Array.isArray(v) ? v[0] : v)
 
 export function isoMinutes(v: unknown): number | null {
-  const m = typeof v === 'string' && v.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:[\d.]+S)?)?$/i)
+  const m =
+    typeof v === 'string' && v.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:[\d.]+S)?)?$/i)
   if (!m || v === 'P' || v === 'PT') return null
   const mins = +(m[1] ?? 0) * 1440 + +(m[2] ?? 0) * 60 + +(m[3] ?? 0)
   return Math.min(mins, 10000)
@@ -81,7 +90,10 @@ function servings(v: unknown): number | null {
 }
 
 function mealTypes(category: unknown): string[] {
-  const text = [category].flat().map((c) => clean(c, 100).toLowerCase()).join(' ')
+  const text = [category]
+    .flat()
+    .map((c) => clean(c, 100).toLowerCase())
+    .join(' ')
   const types = (
     [
       ['breakfast', /breakfast|brunch/],
@@ -98,12 +110,18 @@ function mealTypes(category: unknown): string[] {
 function steps(v: unknown, out: string[] = [], depth = 0): string[] {
   if (depth > 4 || out.length >= 100) return out
   if (typeof v === 'string') {
-    out.push(...v.split(/\n+/).map((s) => clean(s, 5000)).filter(Boolean))
+    out.push(
+      ...v
+        .split(/\n+/)
+        .map((s) => clean(s, 5000))
+        .filter(Boolean),
+    )
   } else if (Array.isArray(v)) {
     for (const item of v) steps(item, out, depth + 1)
   } else if (v && typeof v === 'object') {
     const n = v as Node
-    if (n.itemListElement) steps(n.itemListElement, out, depth + 1) // HowToSection
+    if (n.itemListElement)
+      steps(n.itemListElement, out, depth + 1) // HowToSection
     else {
       const text = clean(n.text ?? n.name, 5000)
       if (text) out.push(text)

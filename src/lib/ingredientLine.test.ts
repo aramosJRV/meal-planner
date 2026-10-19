@@ -23,7 +23,11 @@ test.each([
 
 test('raw text is always kept (whitespace tidied)', () => {
   expect(p('  2   cups   rice ').raw_text).toBe('2 cups rice')
-  expect(p('A little oil')).toMatchObject({ raw_text: 'A little oil', quantity: null, name: 'A little oil' })
+  expect(p('A little oil')).toMatchObject({
+    raw_text: 'A little oil',
+    quantity: null,
+    name: 'A little oil',
+  })
 })
 
 test('a line with only an amount still has a name', () => {

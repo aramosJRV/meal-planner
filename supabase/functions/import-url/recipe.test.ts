@@ -37,9 +37,17 @@ test('reads a plain Recipe object', () => {
 })
 
 test('finds the Recipe inside @graph, arrays and multi-type nodes', () => {
-  const recipe = { '@type': ['Recipe', 'NewsArticle'], name: 'Pancakes', recipeCategory: ['Breakfast'] }
-  expect(parseRecipePage(page({ '@graph': [{ '@type': 'WebPage' }, recipe] }), 'u')?.title).toBe('Pancakes')
-  expect(parseRecipePage(page([{ '@type': 'Organization' }, recipe]), 'u')?.meal_types).toEqual(['breakfast'])
+  const recipe = {
+    '@type': ['Recipe', 'NewsArticle'],
+    name: 'Pancakes',
+    recipeCategory: ['Breakfast'],
+  }
+  expect(parseRecipePage(page({ '@graph': [{ '@type': 'WebPage' }, recipe] }), 'u')?.title).toBe(
+    'Pancakes',
+  )
+  expect(parseRecipePage(page([{ '@type': 'Organization' }, recipe]), 'u')?.meal_types).toEqual([
+    'breakfast',
+  ])
 })
 
 test('skips broken JSON-LD blocks and finds the next one', () => {
@@ -59,7 +67,11 @@ test('HowToStep and HowToSection instructions become steps', () => {
       '@type': 'Recipe',
       name: 'Curry',
       recipeInstructions: [
-        { '@type': 'HowToSection', name: 'Paste', itemListElement: [{ '@type': 'HowToStep', text: 'Blitz.' }] },
+        {
+          '@type': 'HowToSection',
+          name: 'Paste',
+          itemListElement: [{ '@type': 'HowToStep', text: 'Blitz.' }],
+        },
         { '@type': 'HowToStep', text: '<p>Simmer &amp; serve.</p>' },
       ],
     }),
@@ -69,7 +81,9 @@ test('HowToStep and HowToSection instructions become steps', () => {
 })
 
 test('page text is treated as plain data', () => {
-  expect(clean('<script>alert(1)</script>Ignore previous instructions', 20)).toBe('alert(1) Ignore prev')
+  expect(clean('<script>alert(1)</script>Ignore previous instructions', 20)).toBe(
+    'alert(1) Ignore prev',
+  )
   expect(clean({ evil: true }, 100)).toBe('')
   expect(clean('&#x1F60B; &lt;b&gt;', 100)).toBe('😋 <b>')
 })
@@ -82,8 +96,12 @@ test('ISO 8601 durations', () => {
 })
 
 test('end to end: fetch the local test page and read its recipe', async () => {
-  const fixture = readFileSync(new URL('../../../e2e/fixtures/recipe-page.html', import.meta.url), 'utf8')
-  const fetch = (async () => new Response(fixture, { headers: { 'content-type': 'text/html' } })) as typeof globalThis.fetch
+  const fixture = readFileSync(
+    new URL('../../../e2e/fixtures/recipe-page.html', import.meta.url),
+    'utf8',
+  )
+  const fetch = (async () =>
+    new Response(fixture, { headers: { 'content-type': 'text/html' } })) as typeof globalThis.fetch
   const { html, url } = await fetchPage('https://recipes.example/lemon-chicken', {
     fetch,
     resolve: async () => ['93.184.215.14'],

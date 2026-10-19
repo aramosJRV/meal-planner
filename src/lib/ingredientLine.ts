@@ -109,7 +109,13 @@ export function parseIngredientLine(raw: string): ParsedLine {
 
   const name = rest.trim() || raw_text
   const note = notes.filter(Boolean).join(', ')
-  return { raw_text, quantity, unit_code: quantity === null ? null : unit_code, name, note: note || null }
+  return {
+    raw_text,
+    quantity,
+    unit_code: quantity === null ? null : unit_code,
+    name,
+    note: note || null,
+  }
 }
 
 const SINGULAR: Record<string, string> = { leaves: 'leaf', loaves: 'loaf', molasses: 'molasses' }

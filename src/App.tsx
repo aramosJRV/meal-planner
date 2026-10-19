@@ -4,7 +4,14 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import Home from '@/screens/Home'
+import ImportRecipe from '@/screens/ImportRecipe'
 import Onboarding from '@/screens/Onboarding'
+import RecipeDetail from '@/screens/RecipeDetail'
+import RecipeEdit from '@/screens/RecipeEdit'
+import RecipeForm from '@/screens/RecipeForm'
+import { emptyDraft } from '@/screens/recipeData'
+import RecipeLibrary from '@/screens/RecipeLibrary'
+import Screen from '@/screens/Screen'
 import SignIn from '@/screens/SignIn'
 
 function useSession() {
@@ -15,6 +22,36 @@ function useSession() {
     return () => data.subscription.unsubscribe()
   }, [])
   return session
+}
+
+// Hash routes (#/recipes/…) so the back button works without a router dependency.
+function useRoute() {
+  const [hash, setHash] = useState(window.location.hash)
+  useEffect(() => {
+    const onChange = () => {
+      setHash(window.location.hash)
+      window.scrollTo(0, 0)
+    }
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return hash.startsWith('#/') ? hash.slice(2).split('/') : []
+}
+
+function Routes(props: { household: { id: string; name: string }; userId: string }) {
+  const householdId = props.household.id
+  const [section, id, action] = useRoute()
+  if (section !== 'recipes') return <Home {...props} />
+  if (!id) return <RecipeLibrary householdId={householdId} />
+  if (id === 'new')
+    return (
+      <Screen title="Add recipe" back="#/recipes">
+        <RecipeForm householdId={householdId} initial={emptyDraft} />
+      </Screen>
+    )
+  if (id === 'import') return <ImportRecipe householdId={householdId} />
+  if (action === 'edit') return <RecipeEdit key={id} id={id} householdId={householdId} />
+  return <RecipeDetail key={id} id={id} householdId={householdId} />
 }
 
 export default function App() {
@@ -45,5 +82,6 @@ export default function App() {
     )
   // TODO(v2): household switcher when a user belongs to more than one.
   const household = households.data[0]
-  return household ? <Home household={household} userId={session.user.id} /> : <Onboarding />
+  if (!household) return <Onboarding />
+  return <Routes household={household} userId={session.user.id} />
 }

@@ -20,18 +20,37 @@ const inV4 = ([a, b, c]: number[], net: string) => {
 // Not reachable on the public internet: private, loopback, link-local, CGNAT, multicast,
 // documentation and reserved ranges.
 const BLOCKED_V4 = [
-  '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16', '172.16.0.0/12',
-  '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '192.168.0.0/16', '198.18.0.0/15',
-  '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4',
+  '0.0.0.0/8',
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '127.0.0.0/8',
+  '169.254.0.0/16',
+  '172.16.0.0/12',
+  '192.0.0.0/24',
+  '192.0.2.0/24',
+  '192.88.99.0/24',
+  '192.168.0.0/16',
+  '198.18.0.0/15',
+  '198.51.100.0/24',
+  '203.0.113.0/24',
+  '224.0.0.0/4',
+  '240.0.0.0/4',
 ]
 
 function v6(ip: string): number[] | null {
-  let s = ip.toLowerCase().replace(/^\[|\]$/g, '').replace(/%.*$/, '')
+  let s = ip
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/%.*$/, '')
   const dotted = s.match(/(\d+\.\d+\.\d+\.\d+)$/)
   if (dotted) {
     const p = v4(dotted[1])
     if (!p) return null
-    s = s.slice(0, -dotted[1].length) + ((p[0] << 8) | p[1]).toString(16) + ':' + ((p[2] << 8) | p[3]).toString(16)
+    s =
+      s.slice(0, -dotted[1].length) +
+      ((p[0] << 8) | p[1]).toString(16) +
+      ':' +
+      ((p[2] << 8) | p[3]).toString(16)
   }
   const halves = s.split('::')
   if (halves.length > 2) return null
@@ -60,7 +79,12 @@ export function isBlockedIp(ip: string): boolean {
   if (g[0] === 0x2001 && g[1] === 0) return true // Teredo
   if (g[0] === 0x2001 && g[1] === 0xdb8) return true // documentation
   if (g[0] === 0x100 && zeros(4)) return true // discard
-  return (g[0] & 0xfe00) === 0xfc00 || (g[0] & 0xffc0) === 0xfe80 || (g[0] & 0xffc0) === 0xfec0 || g[0] >> 8 === 0xff
+  return (
+    (g[0] & 0xfe00) === 0xfc00 ||
+    (g[0] & 0xffc0) === 0xfe80 ||
+    (g[0] & 0xffc0) === 0xfec0 ||
+    g[0] >> 8 === 0xff
+  )
 }
 
 export type Resolve = (host: string) => Promise<string[]>
