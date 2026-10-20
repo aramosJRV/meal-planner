@@ -47,11 +47,14 @@ jobs:
       - run: npm ci
       - uses: supabase/setup-cli@v1
         with: { version: 2.120.0 }
-      # Auth, API, functions and the Mailpit inbox are needed for the magic-link flow.
-      - run: supabase start -x realtime,storage-api,imgproxy,studio,postgres-meta,logflare,vector,supavisor
+      # Fake AI settings: extract-recipe runs for real but can't reach Anthropic (nothing is sent).
+      - run: printf 'ANTHROPIC_API_KEY=test-not-a-real-key\nANTHROPIC_BASE_URL=http://127.0.0.1:9\nAI_EXTRACT_DAILY_LIMIT=2\n' > supabase/functions/.env
+      # Auth, API, functions and the Mailpit inbox are needed for the magic-link flow; storage for screenshots.
+      - run: supabase start -x realtime,imgproxy,studio,postgres-meta,logflare,vector,supavisor
       - run: cp .env.example .env
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env: { E2E_FAKE_AI: '1' }
       - if: failure()
         uses: actions/upload-artifact@v4
         with: { name: playwright-report, path: playwright-report }

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { canonicalName, parseIngredientLine } from '@/lib/ingredientLine'
+import { type Line, readLines } from '@/lib/importLines'
 import { supabase } from '@/lib/supabase'
 
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -16,7 +16,7 @@ export type Draft = {
   ingredients: string
   steps: string
   notes: string | null
-  source_type: 'manual' | 'url'
+  source_type: 'manual' | 'url' | 'instagram'
   source_url: string | null
 }
 
@@ -106,19 +106,17 @@ const lines = (text: string) =>
     .filter(Boolean)
 
 // Saves the recipe, its lines and steps in one database transaction (save_recipe).
+// `lines` (from the import review) override parsing the ingredients box.
 export function useSaveRecipe(householdId: string, recipeId?: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (draft: Draft) => {
+    mutationFn: async ({ lines: prepared, ...draft }: Draft & { lines?: Line[] }) => {
       const { ingredients, steps, ...recipe } = draft
       const { data, error } = await supabase.rpc('save_recipe', {
         p_household_id: householdId,
         p_recipe_id: recipeId ?? null,
         p_recipe: recipe,
-        p_lines: lines(ingredients).map((raw) => {
-          const line = parseIngredientLine(raw)
-          return { ...line, canonical_name: canonicalName(line.name) }
-        }),
+        p_lines: prepared ?? readLines(ingredients),
         p_steps: lines(steps),
       })
       if (error) {

@@ -68,7 +68,7 @@ All household-owned tables carry `household_id uuid not null` and RLS: row visib
 | Function | Purpose |
 |---|---|
 | `import-url` | Fetch URL server-side; parse schema.org `Recipe` JSON-LD; if absent, fall back to `extract-recipe` on page text. **SSRF guard**: http/https only, block private/loopback IP ranges, size + timeout limits |
-| `extract-recipe` | Input: caption text and/or screenshot paths. Calls Claude with a **forced tool/JSON schema** output (title, servings, times, ingredients[{raw, qty, unit, ingredient_name, note}], steps[]). Input text treated as untrusted data; never follows instructions in it. Maps `ingredient_name` → existing `ingredients` (exact canonical match, then fuzzy via `pg_trgm`; else propose new). Writes `recipe_imports.extracted`. Enforces rate limit (e.g. 20/household/day, configurable) and logs `ai_usage` |
+| `extract-recipe` | Input: caption text and/or screenshot paths. Calls Claude with a **forced tool/JSON schema** output (title, servings, times, ingredients[{raw, qty, unit, ingredient_name, note}], steps[]). Input text treated as untrusted data; never follows instructions in it. Writes `recipe_imports.extracted`. Enforces rate limit (e.g. 20/household/day, configurable) and logs `ai_usage`. Mapping `ingredient_name` → existing `ingredients` (exact canonical match, then fuzzy via `pg_trgm`; else new) is done by the Import review screen through `match_ingredients()`, so it follows the user's edits (changed 2026-10-20, approved) |
 | `generate-plan` | Fills empty, unlocked slots for a week (see §6). Accepts `scope: week|entry` for reshuffle |
 | `sync-grocery-list` | Rebuilds plan-sourced items by merge (see §7) |
 | `accept-invite` | Validates code/expiry, inserts `household_members`, marks invite used |
@@ -103,7 +103,7 @@ Weights live in `households.planner_settings`. Pure scoring function in a shared
 ## 9. Share sheet (Instagram and others)
 - iOS Share Extension + Android `ACTION_SEND` intent filter, receiving URL / text / images.
 - Payload handed to the app → opens **Import** screen prefilled (URL, any shared text, images). User can paste caption and add screenshots, then "Extract".
-- **Spike first (M3)**: evaluate existing Capacitor share-target plugins vs a small native extension. Choose the one that supports both platforms and images.
+- **Spike (M3, 2026-10-20)**: chose `@capgo/capacitor-share-target` (free, Capacitor 8, iOS + Android, text/links/images) plus a small iOS Share Extension writing to the App Group `group.com.jrvsolutions.mealplanner`. Rejected: Capawesome share-target (paid), send-intent (Capacitor 7 only), fully custom native code (more to maintain).
 
 ## 10. Screens (v1)
 - **Onboarding**: sign in → create household or join with code
@@ -113,6 +113,13 @@ Weights live in `households.planner_settings`. Pure scoring function in a shared
 - **Import review**: extracted fields editable, ingredient mappings with "new ingredient" flags, save
 - **Grocery list**: grouped by aisle, tick, add manual item, refresh from plan, offline indicator
 - **Settings**: household name, members, invite, slot config, weeknight cap
+
+### Visual style — "The Menu" (chosen 2026-10-19)
+Editorial, set like a printed menu. Mockups: https://claude.ai/artifact/J9v8RCAUT22LW2ASxUUPQS (row D).
+- **Type**: Instrument Serif (display, titles, recipe names, big numbers; italic for accents and empty states) + Instrument Sans (body, labels, buttons). Small labels are uppercase, letter-spaced 0.12–0.16em.
+- **Colour**: paper `#FBFAF7`, ink `#161412`, muted `#6B655E`, hairlines `#DEDAD3`, one accent red `#B3261E` (today, locks, section labels). No other accent colours.
+- **Shape**: no cards, no shadows, square corners. Structure comes from hairline rules (1.5px ink rule to open a section, 1px rules between rows). Text-only bottom nav with a red underline on the active tab. One solid ink button per screen as the main action.
+- **Copy**: warm and plain ("Nothing yet", "You'll need", "Start cooking"), Australian English.
 
 ## 11. Build milestones
 Each milestone ends with tests passing and a working build. Merge to `main` on green CI + independent reviewer approval; releases and migrations need human approval (see CLAUDE.md).

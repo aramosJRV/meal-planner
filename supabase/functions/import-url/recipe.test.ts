@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { fetchPage } from './guard'
-import { clean, isoMinutes, parseRecipePage } from './recipe'
+import { clean, isoMinutes, pageText, parseRecipePage } from './recipe'
 
 const page = (jsonld: unknown) =>
   `<html><head><script type="application/ld+json">${JSON.stringify(jsonld)}</script></head></html>`
@@ -110,4 +110,14 @@ test('end to end: fetch the local test page and read its recipe', async () => {
   expect(r?.title).toBe('Lemon herb chicken')
   expect(r?.ingredients).toContain('2 cloves garlic, crushed')
   expect(r?.steps).toHaveLength(3)
+})
+
+test('page text for the AI fallback: description first, no scripts or styles', () => {
+  const html = `<html><head><title>x</title>
+    <meta property="og:description" content="Best pasta &amp; sauce: 200 g spaghetti" />
+    <meta name="description" content='Best pasta &amp; sauce: 200 g spaghetti'>
+    <style>.a{color:red}</style></head>
+    <body><script>alert(1)</script><h1>Pasta</h1><p>Boil   the pasta.</p></body></html>`
+  expect(pageText(html)).toBe('Best pasta & sauce: 200 g spaghetti\n\nPasta Boil the pasta.')
+  expect(pageText(`<p>${'a'.repeat(50)}</p>`, 10)).toBe('a'.repeat(10))
 })

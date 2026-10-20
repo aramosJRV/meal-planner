@@ -158,3 +158,15 @@ export const parseRecipePage = (html: string, url: string) => {
   const node = findRecipeNode(html)
   return node && toRecipe(node, url)
 }
+
+// Readable text of a page for the AI fallback (extract-recipe) when there's no JSON-LD:
+// its description (Instagram puts the caption there), then the body without scripts and styles.
+export function pageText(html: string, max = 20000): string {
+  const meta = [
+    ...html.matchAll(/<meta\b[^>]*(?:name|property)\s*=\s*["'](?:og:)?description["'][^>]*>/gi),
+  ]
+    .map(([tag]) => tag.match(/content\s*=\s*"([^"]*)"|content\s*=\s*'([^']*)'/i))
+    .map((m) => clean(m?.[1] ?? m?.[2], 5000))
+  const body = clean(html.replace(/<(script|style|noscript|svg|head)\b[\s\S]*?<\/\1>/gi, ' '), max)
+  return [...new Set(meta), body].filter(Boolean).join('\n\n').slice(0, max)
+}

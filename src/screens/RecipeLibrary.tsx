@@ -31,7 +31,7 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
           Add recipe
         </a>
         <a href="#/recipes/import" className={buttonVariants({ variant: 'outline' })}>
-          Add from a link
+          Import a recipe
         </a>
       </div>
 
