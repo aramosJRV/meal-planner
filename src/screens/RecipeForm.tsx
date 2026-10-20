@@ -105,8 +105,9 @@ export default function RecipeForm({
             source_url: initial.source_url,
           },
           {
-            // Only now re-enable Save, so there's no gap between the check and the save starting.
-            onSettled: () => setChecking(false),
+            // Save stays disabled through success (the screen then navigates away); only a failed
+            // save re-enables it, so a second tap can't create a duplicate recipe.
+            onError: () => setChecking(false),
             onSuccess: async (id) => {
               if (importId) {
                 const { error } = await supabase
