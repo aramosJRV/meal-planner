@@ -83,9 +83,8 @@ export default function RecipeForm({
             found = await queryClient.fetchQuery(matchQuery(ingredients))
           } catch (err) {
             console.error('match_ingredients', err)
-            return setMatchError(true)
-          } finally {
             setChecking(false)
+            return setMatchError(true)
           }
         }
         save.mutate(
@@ -106,6 +105,8 @@ export default function RecipeForm({
             source_url: initial.source_url,
           },
           {
+            // Only now re-enable Save, so there's no gap between the check and the save starting.
+            onSettled: () => setChecking(false),
             onSuccess: async (id) => {
               if (importId) {
                 const { error } = await supabase

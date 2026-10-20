@@ -98,10 +98,11 @@ export default {
 
       let message
       try {
-        // Stays well inside the Edge Function time limit, so a slow call still ends as 'failed'.
+        // Worst case 2 tries × 45 s + retry backoff (≤ 8 s) ≈ 98 s, inside the 150 s Edge Function
+        // limit, so a slow call still ends as 'failed' instead of the worker being killed.
         message = await new Anthropic({
           apiKey,
-          timeout: 60_000,
+          timeout: 45_000,
           maxRetries: 1,
         }).beta.messages.create({
           model: MODEL,
