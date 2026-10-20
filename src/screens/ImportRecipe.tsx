@@ -241,7 +241,6 @@ function ImportForm({ householdId, shared }: { householdId: string; shared: Shar
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
                     aria-label={`Remove ${file.name}`}
                     onClick={() => setFiles(files.filter((_, j) => j !== i))}
                   >

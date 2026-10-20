@@ -149,7 +149,12 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
           </div>
         </div>
         <p className="text-muted-foreground text-sm">Serves {servings}</p>
-        <ul className="border-foreground flex flex-col border-t-[1.5px]" data-testid="ingredients">
+        {/* role="list": Safari drops list semantics when list-style is none. */}
+        <ul
+          role="list"
+          className="border-foreground flex flex-col border-t-[1.5px]"
+          data-testid="ingredients"
+        >
           {recipe.recipe_ingredients.map((l) => (
             <li key={l.id} className="border-b py-2">
               {lineText(l, servings, recipe.base_servings)}
@@ -161,7 +166,7 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
       {!!recipe.recipe_steps.length && (
         <section className="flex flex-col gap-3">
           <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">Method</h2>
-          <ol className="flex flex-col gap-3">
+          <ol role="list" className="flex flex-col gap-3">
             {recipe.recipe_steps.map((s, i) => (
               <li key={s.id} className="flex gap-3">
                 <span className="text-highlight w-6 shrink-0 font-serif text-2xl leading-6">
