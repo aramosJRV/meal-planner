@@ -40,7 +40,9 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 - Official plugins: `code-review`, `pr-review-toolkit`, `security-guidance` (all `@claude-plugins-official`).
 
 ## Current state
-- M0 (Scaffold) merged 2026-10-12 (PR #1). M1 (Tenancy) merged 2026-10-18 (PR #2). M2 (Recipes) merged 2026-10-19 (PR #4). Next: M3 (AI import).
+- M0 (Scaffold) merged 2026-10-12 (PR #1). M1 (Tenancy) merged 2026-10-18 (PR #2). M2 (Recipes) merged 2026-10-19 (PR #4). M3 (AI import) merged 2026-10-20 (PR #6). Next: M4 (Planner).
+- AI import uses Claude Sonnet 5.5 via `@anthropic-ai/sdk` in `extract-recipe` (user's choice). Ingredient matching runs on the review screen via `match_ingredients()` (approved deviation from DESIGN.md §5). Share sheet: `@capgo/capacitor-share-target` + iOS `ShareExtension` with App Group `group.com.jrvsolutions.mealplanner`.
+- CI e2e runs `extract-recipe` with a fake key and unreachable AI address (`E2E_FAKE_AI`); nothing reaches Anthropic.
 - Recipe child tables (`recipe_ingredients`, `recipe_steps`) carry `household_id` (rule 4), kept in step with the parent by a composite FK — an approved deviation from DESIGN.md §4. Recipe create/edit goes through `save_recipe()` (one transaction).
 - Required checks on `main`: lint, test, build, e2e, rls. Local dev needs Docker Desktop running + `supabase start`.
 - GitHub repo is public (free accounts can't protect private branches). `main` is protected: PR only, required checks, no force-push, applies to admins.
