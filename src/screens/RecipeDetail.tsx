@@ -104,14 +104,20 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
         </p>
       )}
 
-      {recipe.description && <p>{recipe.description}</p>}
+      {recipe.description && (
+        <p className="text-muted-foreground font-serif text-xl leading-snug italic">
+          {recipe.description}
+        </p>
+      )}
       <p className="text-muted-foreground text-sm">
         {[recipe.cuisine, ...minutes].filter(Boolean).join(' · ')}
       </p>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Ingredients</h2>
+          <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">
+            Ingredients
+          </h2>
           <div className="flex items-center gap-1">
             <Button
               variant="outline"
@@ -143,19 +149,26 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
           </div>
         </div>
         <p className="text-muted-foreground text-sm">Serves {servings}</p>
-        <ul className="flex list-disc flex-col gap-1 pl-5" data-testid="ingredients">
+        <ul className="border-foreground flex flex-col border-t-[1.5px]" data-testid="ingredients">
           {recipe.recipe_ingredients.map((l) => (
-            <li key={l.id}>{lineText(l, servings, recipe.base_servings)}</li>
+            <li key={l.id} className="border-b py-2">
+              {lineText(l, servings, recipe.base_servings)}
+            </li>
           ))}
         </ul>
       </section>
 
       {!!recipe.recipe_steps.length && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold">Method</h2>
-          <ol className="flex list-decimal flex-col gap-2 pl-5">
-            {recipe.recipe_steps.map((s) => (
-              <li key={s.id}>{s.text}</li>
+          <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">Method</h2>
+          <ol className="flex flex-col gap-3">
+            {recipe.recipe_steps.map((s, i) => (
+              <li key={s.id} className="flex gap-3">
+                <span className="text-highlight w-6 shrink-0 font-serif text-2xl leading-6">
+                  {i + 1}
+                </span>
+                {s.text}
+              </li>
             ))}
           </ol>
         </section>
@@ -163,7 +176,7 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
 
       {recipe.notes && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xl font-semibold">Notes</h2>
+          <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">Notes</h2>
           <p className="whitespace-pre-line">{recipe.notes}</p>
         </section>
       )}

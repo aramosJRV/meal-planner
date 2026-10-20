@@ -5,7 +5,7 @@ import { MEAL_TYPES, useRecipes } from './recipeData'
 import Screen from './Screen'
 
 const select =
-  'border-input h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs capitalize focus-visible:outline-none'
+  'border-input h-11 rounded-md border bg-transparent px-2 text-sm capitalize focus-visible:outline-none'
 
 export default function RecipeLibrary({ householdId }: { householdId: string }) {
   const recipes = useRecipes(householdId)
@@ -93,15 +93,20 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
         <p className="text-muted-foreground">No recipes match those filters.</p>
       )}
 
-      <ul className="flex flex-col divide-y">
+      <ul className="border-foreground flex flex-col divide-y border-t-[1.5px]">
         {shown.map((r) => {
           const minutes = (r.prep_minutes ?? 0) + (r.cook_minutes ?? 0)
           return (
             <li key={r.id}>
               <a href={`#/recipes/${r.id}`} className="flex flex-col py-3 hover:underline">
-                <span className="font-medium">
+                <span className="font-serif text-2xl leading-tight">
                   {r.title}
-                  {r.is_favourite && <span aria-label="favourite"> ★</span>}
+                  {r.is_favourite && (
+                    <span aria-label="favourite" className="text-highlight">
+                      {' '}
+                      ★
+                    </span>
+                  )}
                 </span>
                 <span className="text-muted-foreground text-sm">
                   {[r.cuisine, minutes ? `${minutes} min` : null].filter(Boolean).join(' · ')}
