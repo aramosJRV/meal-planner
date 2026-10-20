@@ -3,16 +3,19 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
-import Home from '@/screens/Home'
+import ChooseMeal from '@/screens/ChooseMeal'
 import ImportRecipe from '@/screens/ImportRecipe'
 import Onboarding from '@/screens/Onboarding'
+import type { Household } from '@/screens/planData'
 import RecipeDetail from '@/screens/RecipeDetail'
 import RecipeEdit from '@/screens/RecipeEdit'
 import RecipeForm from '@/screens/RecipeForm'
 import { emptyDraft } from '@/screens/recipeData'
 import RecipeLibrary from '@/screens/RecipeLibrary'
 import Screen from '@/screens/Screen'
+import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
+import ThisWeek from '@/screens/ThisWeek'
 
 function useSession() {
   // undefined = still checking; fires INITIAL_SESSION straight away, including after a magic-link redirect.
@@ -38,10 +41,30 @@ function useRoute() {
   return hash.startsWith('#/') ? hash.slice(2).split('/') : []
 }
 
-function Routes(props: { household: { id: string; name: string }; userId: string }) {
+const DATE = /^\d{4}-\d{2}-\d{2}$/
+const SLOT = /^(breakfast|lunch|dinner|snack)$/
+
+function Routes(props: { household: Household; userId: string }) {
   const householdId = props.household.id
-  const [section, id, action] = useRoute()
-  if (section !== 'recipes') return <Home {...props} />
+  const [section, id, action, slot] = useRoute()
+  if (section === 'settings') return <Settings {...props} />
+  if (section === 'week' && DATE.test(id ?? '') && DATE.test(action ?? '') && SLOT.test(slot ?? ''))
+    return (
+      <ChooseMeal
+        household={props.household}
+        weekStart={id}
+        date={action}
+        slot={slot as 'dinner'}
+      />
+    )
+  if (section !== 'recipes')
+    return (
+      <ThisWeek
+        key={id}
+        household={props.household}
+        weekStart={section === 'week' && DATE.test(id ?? '') ? id : undefined}
+      />
+    )
   if (!id) return <RecipeLibrary householdId={householdId} />
   if (id === 'new')
     return (
@@ -63,10 +86,10 @@ export default function App() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('households')
-        .select('id, name')
+        .select('id, name, slot_config, planner_settings, week_start_day')
         .order('created_at')
       if (error) throw error
-      return data
+      return data as Household[]
     },
   })
 

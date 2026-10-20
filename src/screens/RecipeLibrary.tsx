@@ -25,7 +25,7 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
   )
 
   return (
-    <Screen title="Recipes" back="#/">
+    <Screen title="Recipes" nav="recipes">
       <div className="flex gap-2">
         <a href="#/recipes/new" className={buttonVariants()}>
           Add recipe
