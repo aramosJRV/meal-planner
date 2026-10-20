@@ -85,9 +85,11 @@ export function desiredItems(entries: PlanEntry[]): DesiredItem[] {
 }
 
 // One unit used → keep it (2 tbsp + 1 tbsp = 3 tbsp); mixed → base unit. Then g/kg, ml/l by size.
+// Rounds before toDisplay so 999.9999 g reaches the 1000 g → kg switch.
+// TODO(v2): round counts up (1.5 eggs → 2) and convert big spoon totals (30 tsp) to larger units.
 function displayQuantity(base: string, { total, units }: Bucket): Quantity {
   const only = units.size === 1 ? [...units][0] : base
-  const { quantity, unit } = toDisplay(convert(total, base, only)!, only)
+  const { quantity, unit } = toDisplay(round(convert(total, base, only)!), only)
   return { qty: round(quantity), unit }
 }
 

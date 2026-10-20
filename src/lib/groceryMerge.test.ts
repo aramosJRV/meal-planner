@@ -75,6 +75,31 @@ describe('desiredItems', () => {
     ).toEqual([{ qty: 1.005, unit: 'l' }])
   })
 
+  test('float sums just under 1000 still switch to kg', () => {
+    const sixth = entry([[flour, 1000, 'g']], { servings: 1, base: 6 })
+    expect(desiredItems(Array(6).fill(sixth))[0].quantities).toEqual([{ qty: 1, unit: 'kg' }])
+  })
+
+  test('unknown unit codes sum only with themselves', () => {
+    const items = desiredItems([
+      entry([[onion, 1, 'bunch']]),
+      entry([[onion, 2, 'bunch']]),
+      entry([[onion, 1, 'each']]),
+    ])
+    expect(items[0].quantities).toEqual([
+      { qty: 3, unit: 'bunch' },
+      { qty: 1, unit: 'each' },
+    ])
+  })
+
+  test('scales before summing mixed units', () => {
+    const items = desiredItems([
+      entry([[flour, 1, 'cup']], { servings: 2, base: 4 }),
+      entry([[flour, 1, 'tbsp']], { servings: 8 }),
+    ])
+    expect(items[0].quantities).toEqual([{ qty: 165, unit: 'ml' }])
+  })
+
   test('small kg amounts display in g', () => {
     expect(desiredItems([entry([[flour, 0.25, 'kg']])])[0].quantities).toEqual([
       { qty: 250, unit: 'g' },
@@ -241,6 +266,13 @@ describe('diffGroceryItems', () => {
   test('a duplicate plan item for one ingredient is treated as no longer needed', () => {
     const diff = diffGroceryItems([want('onion')], [have('i1', 'onion'), have('i2', 'onion')])
     expect(diff).toEqual({ insert: [], update: [], remove: ['i2'], markStale: [] })
+  })
+
+  test('an item that becomes "to taste" only drops its quantities', () => {
+    const desired = desiredItems([entry([[garlic, null, null]])])
+    expect(diffGroceryItems(desired, [have('i1', 'garlic', { checked: true })]).update).toEqual([
+      { id: 'i1', quantities: [], stale: false },
+    ])
   })
 
   test('a plan item with no ingredient is treated as no longer needed', () => {
