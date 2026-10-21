@@ -98,21 +98,28 @@ export default {
 
       let message
       try {
-        // Stays well inside the Edge Function time limit, so a slow call still ends as 'failed'.
+        // One 110 s deadline for the whole call, retries and any retry-after wait included: inside
+        // the 150 s Edge Function limit, so a slow call ends as 'failed' instead of being killed.
         message = await new Anthropic({
           apiKey,
-          timeout: 60_000,
+          timeout: 45_000,
           maxRetries: 1,
-        }).beta.messages.create({
-          model: MODEL,
-          max_tokens: 16000,
-          // If Sonnet declines on a safety false positive, the API retries on a suitable model.
-          betas: ['server-side-fallback-2026-07-01'],
-          fallbacks: 'default',
-          output_config: { effort: 'low', format: { type: 'json_schema', schema: RECIPE_SCHEMA } },
-          system: SYSTEM,
-          messages: [{ role: 'user', content: userContent(input, images) }],
-        } as Anthropic.Beta.MessageCreateParamsNonStreaming)
+        }).beta.messages.create(
+          {
+            model: MODEL,
+            max_tokens: 16000,
+            // If Sonnet declines on a safety false positive, the API retries on a suitable model.
+            betas: ['server-side-fallback-2026-07-01'],
+            fallbacks: 'default',
+            output_config: {
+              effort: 'low',
+              format: { type: 'json_schema', schema: RECIPE_SCHEMA },
+            },
+            system: SYSTEM,
+            messages: [{ role: 'user', content: userContent(input, images) }],
+          } as Anthropic.Beta.MessageCreateParamsNonStreaming,
+          { signal: AbortSignal.timeout(110_000) },
+        )
       } catch (e) {
         console.error('extract-recipe: claude', e)
         // An error response from the API isn't billed; a dropped connection or timeout might be.
