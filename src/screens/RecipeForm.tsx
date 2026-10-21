@@ -83,9 +83,8 @@ export default function RecipeForm({
             found = await queryClient.fetchQuery(matchQuery(ingredients))
           } catch (err) {
             console.error('match_ingredients', err)
-            return setMatchError(true)
-          } finally {
             setChecking(false)
+            return setMatchError(true)
           }
         }
         save.mutate(
@@ -106,6 +105,9 @@ export default function RecipeForm({
             source_url: initial.source_url,
           },
           {
+            // Save stays disabled through success (the screen then navigates away); only a failed
+            // save re-enables it, so a second tap can't create a duplicate recipe.
+            onError: () => setChecking(false),
             onSuccess: async (id) => {
               if (importId) {
                 const { error } = await supabase

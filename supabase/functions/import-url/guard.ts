@@ -146,7 +146,7 @@ export async function fetchPage(
         await res.body.cancel()
         throw new ImportError('too_large')
       }
-      const chunks: Uint8Array[] = []
+      const chunks: Uint8Array<ArrayBuffer>[] = []
       let size = 0
       for await (const chunk of res.body) {
         size += chunk.byteLength
