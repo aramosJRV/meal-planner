@@ -133,7 +133,10 @@ export function planWeek(input: {
       const sameCuisine = cuisine
         ? week.filter((e) => cuisineKey(byId.get(e.recipe_id)?.cuisine ?? null) === cuisine).length
         : 0
+      // Only repeats have a count; it spreads them out instead of piling onto one recipe.
+      const timesThisWeek = week.filter((e) => e.recipe_id === r.id).length
       const score =
+        -timesThisWeek * 10 +
         s.w_recency * recency(r.last_planned, t.date) +
         s.w_fav * (r.is_favourite ? 1 : 0) +
         s.w_overlap * jaccard(new Set(r.ingredients.map((i) => i.id)), weekIngredients) -
@@ -165,8 +168,8 @@ function explain(
   byId: Map<string, Candidate>,
   repeat: boolean,
 ): string {
+  if (repeat) return 'Repeat (not enough recipes for this slot)'
   const parts: string[] = []
-  if (repeat) parts.push('Repeat (not enough recipes for this slot)')
   if (r.is_favourite) parts.push('Favourite')
   if (!r.last_planned) parts.push('not had in a while')
   else {

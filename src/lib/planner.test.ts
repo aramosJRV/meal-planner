@@ -102,6 +102,19 @@ describe('used this week', () => {
     expect(p[1].reason).toMatch(/^Repeat/)
   })
 
+  test('repeats spread across the library instead of piling onto one recipe', () => {
+    const p = planWeek({
+      recipes: [recipe('a', { is_favourite: true }), recipe('b'), recipe('c')],
+      fixed: [],
+      targets: weekDates(MON).map((date) => ({ date, slot: 'dinner' as const })),
+      settings: noJitter,
+      seed: 's',
+    })
+    const counts = ['a', 'b', 'c'].map((id) => p.filter((x) => x.recipe_id === id).length)
+    expect(counts.sort()).toEqual([2, 2, 3])
+    expect(p[3].reason).toBe('Repeat (not enough recipes for this slot)')
+  })
+
   test('picks within one run count as used', () => {
     const p = planWeek({
       recipes: [recipe('a'), recipe('b'), recipe('c')],

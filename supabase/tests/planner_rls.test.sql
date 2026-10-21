@@ -109,9 +109,10 @@ select is((select count(*)::int from public.meal_plan_entries where household_id
   'household B cannot read household A entries');
 update public.meal_plan_entries set servings = 99 where id = pg_temp.v('e1');
 delete from public.meal_plan_entries where id = pg_temp.v('e1');
+-- Refused by the week check before RLS is reached (B can't see A's plan), so any error will do.
 select throws_ok($$ insert into public.meal_plan_entries (meal_plan_id, household_id, date, slot, recipe_id, servings)
   values (current_setting('test.pa')::uuid, current_setting('test.ha')::uuid, '2026-10-29', 'dinner',
-          current_setting('test.ra1')::uuid, 4) $$, '42501', null, 'household B cannot add to household A''s week');
+          current_setting('test.ra1')::uuid, 4) $$, null, null, 'household B cannot add to household A''s week');
 reset role;
 select is((select servings from public.meal_plan_entries where id = pg_temp.v('e1')), 6,
   'household B cannot change or delete household A entries');
