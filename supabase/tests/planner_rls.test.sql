@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B; plus a signed-out user.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(30);
+select plan(31);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local'),
@@ -53,6 +53,10 @@ select is((select count(*)::int from public.meal_plans where household_id = pg_t
 select throws_ok($$ insert into public.meal_plans (household_id, week_start)
   values (current_setting('test.ha')::uuid, '2026-11-09') $$, '42501', null,
   'household B cannot add plans to household A');
+update public.meal_plans set reshuffle_count = 99 where id = pg_temp.v('pa');
+reset role;
+select is((select reshuffle_count from public.meal_plans where id = pg_temp.v('pa')), 1,
+  'household B cannot change household A''s reshuffle counter');
 set local role anon;
 select throws_ok($$ select count(*) from public.meal_plans $$, '42501', null, 'signed-out users get nothing');
 

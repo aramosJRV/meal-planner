@@ -2,7 +2,15 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { SLOTS, type Slot } from '@/lib/planner'
 import { go, useRecipes } from './recipeData'
-import { dayLabel, type Entry, type Household, setSlot, usePlanChange, useWeek } from './planData'
+import {
+  dayLabel,
+  type Entry,
+  type Household,
+  PlanError,
+  setSlot,
+  usePlanChange,
+  useWeek,
+} from './planData'
 import Screen from './Screen'
 
 const label = 'text-highlight text-xs font-bold tracking-[0.16em] uppercase'
@@ -21,7 +29,15 @@ export default function ChooseMeal(p: {
   const [search, setSearch] = useState('')
   const current = week.data?.find((e) => e.date === p.date && e.slot === p.slot)
   const choose = usePlanChange(p.household.id, p.weekStart, setSlot)
+  // Turning a cooked meal into leftovers removes the leftovers planned from it.
+  const losesLeftovers = (leftoverOf?: Entry) =>
+    !!leftoverOf &&
+    !!current &&
+    !current.leftover_of &&
+    !!week.data?.some((e) => e.leftover_of === current.id)
   const pick = (recipe: { id: string; base_servings: number }, leftoverOf?: Entry) =>
+    (!losesLeftovers(leftoverOf) ||
+      window.confirm('This also removes the leftovers planned from this meal.')) &&
     choose.mutate(
       {
         householdId: p.household.id,
@@ -35,6 +51,8 @@ export default function ChooseMeal(p: {
       { onSuccess: () => go(back) },
     )
 
+  // Nothing can be picked until we know what's in the slot now.
+  const blocked = !week.isSuccess || choose.isPending || !!current?.locked
   const order = (e: Entry) => `${e.date}${SLOTS.indexOf(e.slot)}`
   const earlier = (week.data ?? []).filter(
     (e) => !e.leftover_of && order(e) < order({ date: p.date, slot: p.slot } as Entry),
@@ -48,7 +66,7 @@ export default function ChooseMeal(p: {
     <ul role="list" className="border-foreground flex flex-col divide-y border-t-[1.5px]">
       {rs.map((r) => (
         <li key={r.id}>
-          <button className={row} disabled={choose.isPending} onClick={() => pick(r)}>
+          <button className={row} disabled={blocked} onClick={() => pick(r)}>
             <span className="font-serif text-2xl leading-tight">
               {r.title}
               {r.is_favourite && <span className="text-highlight"> ★</span>}
@@ -64,14 +82,26 @@ export default function ChooseMeal(p: {
 
   return (
     <Screen title={`${dayLabel(p.date)} ${p.slot}`} back={back}>
-      {(recipes.isError || week.isError) && (
+      {recipes.isError && (
         <p role="alert" className="text-destructive text-sm">
           Couldn't load your recipes. Please reload the app.
         </p>
       )}
+      {week.isError && (
+        <p role="alert" className="text-destructive text-sm">
+          Couldn't load this week. Please reload the app.
+        </p>
+      )}
+      {current?.locked && (
+        <p role="status" className="text-sm">
+          This meal is locked. Unlock it on the week first.
+        </p>
+      )}
       {choose.isError && (
         <p role="alert" className="text-destructive text-sm">
-          Couldn't save that. Check your connection and try again.
+          {choose.error instanceof PlanError
+            ? choose.error.message
+            : "Couldn't save that. Check your connection and try again."}
         </p>
       )}
 
@@ -83,7 +113,7 @@ export default function ChooseMeal(p: {
               <li key={e.id}>
                 <button
                   className={row}
-                  disabled={choose.isPending}
+                  disabled={blocked}
                   onClick={() => pick({ id: e.recipe_id, base_servings: e.servings }, e)}
                 >
                   <span className="font-serif text-2xl leading-tight">{e.recipes.title}</span>

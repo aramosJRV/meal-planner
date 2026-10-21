@@ -65,6 +65,28 @@ export const isWeeknight = (date: string) => {
   return d >= 1 && d <= 4
 }
 
+// The jitter seed: a new reshuffle counter gives a new plan, the same counter the same plan.
+export const planSeed = (householdId: string, weekStart: string, counter: number) =>
+  `${householdId}:${weekStart}:${counter}`
+
+// A recipe row as generate-plan loads it. Pantry staples don't count towards overlap.
+export type RecipeRow = Omit<Candidate, 'ingredients' | 'last_planned'> & {
+  recipe_ingredients: {
+    ingredient_id: string
+    ingredients: { name: string; is_pantry_staple: boolean }
+  }[]
+}
+export const toCandidate = (
+  { recipe_ingredients, ...r }: RecipeRow,
+  lastPlanned: string | null,
+): Candidate => ({
+  ...r,
+  ingredients: recipe_ingredients
+    .filter((l) => !l.ingredients.is_pantry_staple)
+    .map((l) => ({ id: l.ingredient_id, name: l.ingredients.name })),
+  last_planned: lastPlanned,
+})
+
 // FNV-1a hash → mulberry32: small, fast and the same in every JS runtime.
 export function seededRandom(seed: string): () => number {
   let h = 0x811c9dc5
@@ -174,7 +196,13 @@ function explain(
   if (!r.last_planned) parts.push('not had in a while')
   else {
     const days = Math.round((time(date) - time(r.last_planned)) / DAY)
-    parts.push(days >= 14 ? `not had in ${Math.floor(days / 7)} weeks` : `had ${days} days ago`)
+    parts.push(
+      days >= 14
+        ? `not had in ${Math.floor(days / 7)} weeks`
+        : days === 1
+          ? 'had yesterday'
+          : `had ${days} days ago`,
+    )
   }
   const mine = new Set(r.ingredients.map((i) => i.id))
   for (const e of week) {

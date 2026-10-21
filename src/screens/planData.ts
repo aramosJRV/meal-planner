@@ -33,7 +33,10 @@ export const today = () => new Date().toLocaleDateString('en-CA')
 const planErrors: Record<string, string> = {
   entry_locked: "That meal is locked or is leftovers, so it wasn't changed.",
   forbidden: "You're no longer in this household. Close and reopen the app.",
+  not_found: "That meal was removed. Here's the latest week.",
+  partly_saved: 'Some meals changed before something went wrong. Check the week and try again.',
 }
+const STALE = "Someone else just changed that meal. Here's the latest week."
 
 // Errors whose message is already written for people.
 export class PlanError extends Error {}
@@ -74,7 +77,7 @@ export async function generate(body: {
   week_start: string
   scope: 'week' | 'entry'
   entry_id?: string
-}): Promise<{ filled: number; unfilled: number }> {
+}): Promise<{ changed: number; unfilled: number }> {
   const { data, error } = await supabase.functions.invoke('generate-plan', { body })
   if (error instanceof FunctionsHttpError) {
     const failure = await error.context.json().catch(() => ({}))
@@ -103,17 +106,23 @@ export async function planId(householdId: string, weekStart: string) {
   return data.id as string
 }
 
-const check = ({ error }: { error: unknown }) => {
+const check = ({ error }: { error: { code?: string } | null }) => {
+  if (error?.code === '23505') throw new PlanError(STALE) // slot filled meanwhile
   if (error) throw error
+}
+// An update or delete that matched no row (removed, locked or hidden meanwhile) is a failure.
+const one = (res: { data: unknown[] | null; error: { code?: string } | null }) => {
+  check(res)
+  if (!res.data?.length) throw new PlanError(STALE)
 }
 
 export const updateEntry = async (
   id: string,
   fields: Partial<Pick<Entry, 'recipe_id' | 'servings' | 'locked' | 'reason'>>,
-) => check(await supabase.from('meal_plan_entries').update(fields).eq('id', id))
+) => one(await supabase.from('meal_plan_entries').update(fields).eq('id', id).select('id'))
 
 export const removeEntry = async (id: string) =>
-  check(await supabase.from('meal_plan_entries').delete().eq('id', id))
+  one(await supabase.from('meal_plan_entries').delete().eq('id', id).select('id'))
 
 // Put a recipe (or leftovers of an earlier entry) into a slot, replacing what's there.
 // A cooked meal is updated in place so its leftovers follow; a leftover is replaced.
@@ -127,11 +136,21 @@ export async function setSlot(p: {
   leftoverOf?: Entry
 }) {
   if (p.current && !p.current.leftover_of && !p.leftoverOf)
-    return updateEntry(p.current.id, { recipe_id: p.recipe.id, reason: null })
+    return one(
+      await supabase
+        .from('meal_plan_entries')
+        .update({ recipe_id: p.recipe.id, reason: null })
+        .eq('id', p.current.id)
+        .eq('locked', false) // a meal locked meanwhile stays put
+        .select('id'),
+    )
+  // TODO(v2): delete + insert in one transaction (needs an RPC + migration); a failed insert
+  // after the delete leaves the slot empty. Everything that can fail first runs before the delete.
+  const mealPlanId = await planId(p.householdId, p.weekStart)
   if (p.current) await removeEntry(p.current.id)
   check(
     await supabase.from('meal_plan_entries').insert({
-      meal_plan_id: await planId(p.householdId, p.weekStart),
+      meal_plan_id: mealPlanId,
       household_id: p.householdId,
       date: p.date,
       slot: p.slot,

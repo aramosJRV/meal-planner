@@ -4,10 +4,12 @@ import {
   enabledSlots,
   isWeeknight,
   jaccard,
+  planSeed,
   planWeek,
   readSettings,
   recency,
   seededRandom,
+  toCandidate,
   weekDates,
   weekStartFor,
 } from './planner'
@@ -179,6 +181,47 @@ describe('scoring', () => {
     expect(p[0].reason).toMatch(/shares spinach with Tue$/)
   })
 
+  test('overlap also counts meals picked earlier in the same run', () => {
+    const p = planWeek({
+      recipes: [
+        recipe('a', { is_favourite: true, ingredients: [ing('spinach')] }),
+        recipe('b', { ingredients: [ing('beef')] }),
+        recipe('c', { ingredients: [ing('spinach'), ing('rice')] }),
+      ],
+      fixed: [],
+      targets: [
+        { date: MON, slot: 'dinner' },
+        { date: '2026-10-27', slot: 'dinner' },
+      ],
+      settings: only({ w_fav: 1, w_overlap: 1 }),
+      seed: 's',
+    })
+    expect(p.map((x) => x.recipe_id)).toEqual(['a', 'c'])
+    expect(p[1].reason).toMatch(/shares spinach with Mon$/)
+  })
+
+  test('the cuisine penalty counts each repeat, not just whether there is one', () => {
+    const p = planWeek({
+      recipes: [
+        recipe('t1', { cuisine: 'Thai' }),
+        recipe('t2', { cuisine: 'Thai' }),
+        recipe('i1', { cuisine: 'Italian' }),
+        recipe('t3', { cuisine: 'Thai', is_favourite: true }),
+        recipe('i2', { cuisine: 'Italian' }),
+      ],
+      fixed: [
+        { date: MON, slot: 'dinner', recipe_id: 't1' },
+        { date: '2026-10-27', slot: 'dinner', recipe_id: 't2' },
+        { date: '2026-10-28', slot: 'dinner', recipe_id: 'i1' },
+      ],
+      targets: [{ date: FRI, slot: 'dinner' }],
+      // Thai: +0.5 favourite − 2 repeats = −1.5; Italian: −1. A yes/no penalty (−0.5 vs −1) picks Thai.
+      settings: only({ w_fav: 0.5, w_cuisine: 1 }),
+      seed: 's',
+    })
+    expect(p[0].recipe_id).toBe('i2')
+  })
+
   test('same cuisine already in the week is penalised per repeat (case-insensitive)', () => {
     const p = planWeek({
       recipes: [
@@ -207,6 +250,7 @@ describe('scoring', () => {
     expect(pickFor([recipe('a')]).reason).toBe('Not had in a while')
     expect(pickFor([recipe('a', { last_planned: '2026-10-09' })]).reason).toBe('Not had in 3 weeks')
     expect(pickFor([recipe('a', { last_planned: '2026-10-25' })]).reason).toBe('Had 5 days ago')
+    expect(pickFor([recipe('a', { last_planned: '2026-10-29' })]).reason).toBe('Had yesterday')
   })
 })
 
@@ -233,6 +277,17 @@ describe('seeded jitter', () => {
     expect(run('h:2026-10-26:1')).not.toEqual(run('h:2026-10-26:0'))
   })
 
+  test('the seed changes with household, week and reshuffle counter', () => {
+    const seeds = [
+      planSeed('h', MON, 0),
+      planSeed('h2', MON, 0),
+      planSeed('h', FRI, 0),
+      planSeed('h', MON, 1),
+    ]
+    expect(new Set(seeds).size).toBe(4)
+    expect(planSeed('h', MON, 0)).toBe(planSeed('h', MON, 0))
+  })
+
   test('random numbers are repeatable and between 0 and 1', () => {
     const a = seededRandom('x')
     const b = seededRandom('x')
@@ -247,6 +302,51 @@ describe('seeded jitter', () => {
       expect(pickFor([recipe('a'), fav], DEFAULT_SETTINGS, FRI, { seed: `${i}` }).recipe_id).toBe(
         'fav',
       )
+  })
+})
+
+describe('wiring', () => {
+  test('picks come back in day then meal order, whatever order targets arrive in', () => {
+    const p = planWeek({
+      recipes: [
+        recipe('a', { meal_types: ['lunch', 'dinner'] }),
+        recipe('b', { meal_types: ['lunch', 'dinner'] }),
+      ],
+      fixed: [],
+      targets: [
+        { date: FRI, slot: 'dinner' },
+        { date: MON, slot: 'dinner' },
+        { date: MON, slot: 'lunch' },
+      ],
+      settings: noJitter,
+      seed: 's',
+    })
+    expect(p.map((x) => `${x.date} ${x.slot}`)).toEqual([
+      `${MON} lunch`,
+      `${MON} dinner`,
+      `${FRI} dinner`,
+    ])
+  })
+
+  test('toCandidate drops pantry staples from overlap', () => {
+    const c = toCandidate(
+      {
+        id: 'r',
+        meal_types: ['dinner'],
+        prep_minutes: null,
+        cook_minutes: null,
+        cuisine: null,
+        is_favourite: false,
+        recipe_ingredients: [
+          { ingredient_id: 'salt', ingredients: { name: 'Salt', is_pantry_staple: true } },
+          { ingredient_id: 'kale', ingredients: { name: 'Kale', is_pantry_staple: false } },
+        ],
+      },
+      '2026-10-01',
+    )
+    expect(c.ingredients).toEqual([{ id: 'kale', name: 'Kale' }])
+    expect(c.last_planned).toBe('2026-10-01')
+    expect(c).not.toHaveProperty('recipe_ingredients')
   })
 })
 

@@ -133,7 +133,11 @@ export default function Settings({ household, userId }: Props) {
         )}
         {save.isError && (
           <p role="alert" className="text-destructive text-sm">
-            Couldn't save your settings. Check your connection and try again.
+            {(save.error as { code?: string }).code === 'PGRST116'
+              ? 'Only the household owner can change these.'
+              : (save.error as { code?: string }).code === '23514'
+                ? "Those settings aren't allowed. Keep at least one meal switched on."
+                : "Couldn't save your settings. Check your connection and try again."}
           </p>
         )}
       </form>

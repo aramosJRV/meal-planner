@@ -115,7 +115,7 @@ export default function ThisWeek({
                   entry={at.get(`${date}|${slot}`)}
                   source={(id) => week.data?.find((e) => e.id === id)}
                   hasLeftovers={(id) => !!week.data?.some((e) => e.leftover_of === id)}
-                  loading={week.isPending}
+                  loading={!week.isSuccess}
                 />
               ))}
             </ul>
@@ -218,14 +218,18 @@ function SlotRow(p: {
                   className={action}
                   disabled={entry.locked || change.isPending}
                   onClick={() =>
-                    change.mutate(() =>
-                      generate({
+                    change.mutate(async () => {
+                      const { changed } = await generate({
                         household_id: p.household.id,
                         week_start: p.weekStart,
                         scope: 'entry',
                         entry_id: entry.id,
-                      }),
-                    )
+                      })
+                      if (!changed)
+                        throw new PlanError(
+                          'No other recipes suit this meal. Add more, or choose one yourself.',
+                        )
+                    })
                   }
                 >
                   Reshuffle

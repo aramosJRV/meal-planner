@@ -4,13 +4,15 @@
 import '@supabase/functions-js/edge-runtime.d.ts'
 import { withSupabase } from '@supabase/server'
 import {
-  type Candidate,
   enabledSlots,
   type Fixed,
+  planSeed,
   planWeek,
   readSettings,
+  type RecipeRow,
   type Slot,
   type Target,
+  toCandidate,
   weekDates,
   weekStartFor,
 } from '../../../src/lib/planner.ts'
@@ -22,6 +24,11 @@ const fail = (error: string, status = 400) => Response.json({ error }, { status 
 const serverError = (step: string, cause: unknown) => {
   console.error(`generate-plan: ${step}`, cause)
   return fail('server_error', 500)
+}
+// Some picks may already be saved: say so, so the app doesn't claim nothing changed.
+const partial = (step: string, cause: unknown, changed: number) => {
+  console.error(`generate-plan: ${step} (after ${changed} changes)`, cause)
+  return fail(changed ? 'partly_saved' : 'server_error', 500)
 }
 
 type Entry = {
@@ -116,24 +123,9 @@ export default {
     for (const h of history)
       if (h.date > (lastPlanned.get(h.recipe_id) ?? '')) lastPlanned.set(h.recipe_id, h.date)
 
-    const candidates: Candidate[] = recipes.map((r) => ({
-      id: r.id,
-      meal_types: r.meal_types,
-      prep_minutes: r.prep_minutes,
-      cook_minutes: r.cook_minutes,
-      cuisine: r.cuisine,
-      is_favourite: r.is_favourite,
-      ingredients: (
-        r.recipe_ingredients as unknown as {
-          ingredient_id: string
-          ingredients: { name: string; is_pantry_staple: boolean }
-        }[]
-      )
-        .filter((l) => !l.ingredients.is_pantry_staple)
-        .map((l) => ({ id: l.ingredient_id, name: l.ingredients.name })),
-      last_planned: lastPlanned.get(r.id) ?? null,
-    }))
-    const servings = new Map(recipes.map((r) => [r.id, r.base_servings as number]))
+    const rows = recipes as unknown as (RecipeRow & { base_servings: number })[]
+    const candidates = rows.map((r) => toCandidate(r, lastPlanned.get(r.id) ?? null))
+    const servings = new Map(rows.map((r) => [r.id, r.base_servings]))
 
     const { data: run, error: runError } = await db
       .rpc('start_plan_run', { p_household_id: householdId, p_week_start: weekStart })
@@ -149,25 +141,31 @@ export default {
       fixed,
       targets,
       settings: readSettings(household.planner_settings),
-      seed: `${householdId}:${weekStart}:${counter}`,
+      seed: planSeed(householdId, weekStart, counter),
     })
 
+    // TODO(v2): apply all picks in one transaction (needs an RPC + migration). Today a failure
+    // part-way leaves earlier picks applied; locked meals and leftovers are never touched.
+    const byKey = new Map(targets.map((t) => [`${t.date}|${t.slot}`, t.entry]))
     let unfilled = 0
+    let changed = 0
     const inserts = []
-    for (const [i, p] of picks.entries()) {
-      const entry = targets[i].entry
+    for (const p of picks) {
+      const entry = byKey.get(`${p.date}|${p.slot}`)
       if (!p.recipe_id) {
         unfilled++
         continue
       }
       if (entry) {
         if (entry.recipe_id === p.recipe_id) continue
-        const { error } = await db
+        const { data, error } = await db
           .from('meal_plan_entries')
           .update({ recipe_id: p.recipe_id, reason: p.reason })
           .eq('id', entry.id)
           .eq('locked', false) // someone may have locked it meanwhile
-        if (error) return serverError('update entry', error)
+          .select('id')
+        if (error) return partial('update entry', error, changed)
+        changed += data.length
       } else {
         inserts.push({
           meal_plan_id: planId,
@@ -182,11 +180,13 @@ export default {
     }
     if (inserts.length) {
       // A slot someone filled meanwhile keeps their choice.
-      const { error } = await db
+      const { data, error } = await db
         .from('meal_plan_entries')
         .upsert(inserts, { onConflict: 'meal_plan_id,date,slot', ignoreDuplicates: true })
-      if (error) return serverError('insert entries', error)
+        .select('id')
+      if (error) return partial('insert entries', error, changed)
+      changed += data.length
     }
-    return Response.json({ plan_id: planId, filled: picks.length - unfilled, unfilled })
+    return Response.json({ plan_id: planId, changed, unfilled })
   }),
 }
