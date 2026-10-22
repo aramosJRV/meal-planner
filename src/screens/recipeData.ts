@@ -69,7 +69,9 @@ export function useRecipes(householdId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('recipes')
-        .select('id, title, cuisine, meal_types, is_favourite, prep_minutes, cook_minutes')
+        .select(
+          'id, title, cuisine, meal_types, is_favourite, prep_minutes, cook_minutes, base_servings',
+        )
         .eq('household_id', householdId)
         .order('title')
       if (error) throw error

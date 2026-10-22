@@ -11,6 +11,8 @@ test('sign in by magic link, create a household, invite a second person', async 
   await expect(page.getByRole('heading', { name: 'Set up your household' })).toBeVisible()
   await page.getByLabel('Household name').fill(`The Testers ${run}`)
   await page.getByRole('button', { name: 'Create household' }).click()
+  await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible()
+  await page.getByRole('link', { name: 'Settings' }).click()
   await expect(page.getByRole('heading', { name: `The Testers ${run}` })).toBeVisible()
 
   await page.getByRole('button', { name: 'Invite someone' }).click()
@@ -27,6 +29,9 @@ test('sign in by magic link, create a household, invite a second person', async 
 
   await other.getByLabel('Invite code').fill(code!.toLowerCase())
   await other.getByRole('button', { name: 'Join household' }).click()
+  await expect(other.getByRole('heading', { name: 'This week' })).toBeVisible()
+  await other.getByRole('link', { name: 'Settings' }).click()
   await expect(other.getByRole('heading', { name: `The Testers ${run}` })).toBeVisible()
+  await expect(other.getByRole('button', { name: 'Save settings' })).toBeHidden()
   await expect(other.getByRole('button', { name: 'Invite someone' })).toBeHidden()
 })
