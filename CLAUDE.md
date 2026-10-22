@@ -47,5 +47,5 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 - Required checks on `main`: lint, test, build, e2e, rls. Local dev needs Docker Desktop running + `supabase start`.
 - GitHub repo is public (free accounts can't protect private branches). `main` is protected: PR only, required checks, no force-push, applies to admins.
 - Planner: scoring is `src/lib/planner.ts`, imported directly by the `generate-plan` Edge Function (runs as the caller, so RLS applies). `meal_plans.reshuffle_count` seeds the jitter (bumped by `start_plan_run()`). Leftover entries (`leftover_of`) copy and follow their source recipe via triggers; the M5 grocery sync must skip them. "Suggest week" also reshuffles unlocked, hand-picked meals (not just empty slots), as the UI says.
-- Known M4 gaps (`TODO(v2)`): Suggest week and swapping a cooked meal for leftovers write in several steps, so a mid-way failure can leave part of the change saved (the app reports it); a transactional RPC needs a migration.
+- Known M4 gaps (`TODO(v2)`): Suggest week and swapping to or from leftovers write in several steps, so a mid-way failure can leave part of the change saved (the app reports it); a transactional RPC needs a migration.
 - Local dev only — no hosted Supabase project is linked yet.
