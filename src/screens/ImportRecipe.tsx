@@ -12,7 +12,7 @@ import { type Draft, emptyDraft } from './recipeData'
 import Screen from './Screen'
 
 const textarea =
-  'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs outline-none focus-visible:ring-[3px] md:text-sm'
+  'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-base outline-none focus-visible:ring-[3px] md:text-sm'
 
 const MAX_IMAGES = 5
 
@@ -241,7 +241,6 @@ function ImportForm({ householdId, shared }: { householdId: string; shared: Shar
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
                     aria-label={`Remove ${file.name}`}
                     onClick={() => setFiles(files.filter((_, j) => j !== i))}
                   >

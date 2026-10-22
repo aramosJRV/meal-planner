@@ -16,6 +16,8 @@
   "dependencies": {
     "@capacitor/core": "^8.5.3",
     "@capgo/capacitor-share-target": "^8.0.63",
+    "@fontsource/instrument-sans": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
     "@supabase/supabase-js": "^2.117.3",
     "@tanstack/react-query": "^5.104.2",
     "class-variance-authority": "^0.7.1",
