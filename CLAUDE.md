@@ -40,10 +40,12 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 - Official plugins: `code-review`, `pr-review-toolkit`, `security-guidance` (all `@claude-plugins-official`).
 
 ## Current state
-- M0 (Scaffold) merged 2026-10-12 (PR #1). M1 (Tenancy) merged 2026-10-18 (PR #2). M2 (Recipes) merged 2026-10-19 (PR #4). M3 (AI import) merged 2026-10-20 (PR #6). M5 pure grocery merge logic (`src/lib/groceryMerge.ts`) merged 2026-10-21 (PR #10); the rest of M5 is still open. Next: M4 (Planner).
+- M0 (Scaffold) merged 2026-10-12 (PR #1). M1 (Tenancy) merged 2026-10-18 (PR #2). M2 (Recipes) merged 2026-10-19 (PR #4). M3 (AI import) merged 2026-10-20 (PR #6). M5 pure grocery merge logic (`src/lib/groceryMerge.ts`) merged 2026-10-21 (PR #10). Visual style "The Menu" applied 2026-10-22 (PR #8). M4 (Planner) merged 2026-10-22 (PR #12). Next: the rest of M5 (Grocery).
 - AI import uses Claude Sonnet 5.5 via `@anthropic-ai/sdk` in `extract-recipe` (user's choice). Ingredient matching runs on the review screen via `match_ingredients()` (approved deviation from DESIGN.md §5). Share sheet: `@capgo/capacitor-share-target` + iOS `ShareExtension` with App Group `group.com.jrvsolutions.mealplanner`.
 - CI e2e runs `extract-recipe` with a fake key and unreachable AI address (`E2E_FAKE_AI`); nothing reaches Anthropic.
 - Recipe child tables (`recipe_ingredients`, `recipe_steps`) carry `household_id` (rule 4), kept in step with the parent by a composite FK — an approved deviation from DESIGN.md §4. Recipe create/edit goes through `save_recipe()` (one transaction).
 - Required checks on `main`: lint, test, build, e2e, rls. Local dev needs Docker Desktop running + `supabase start`.
 - GitHub repo is public (free accounts can't protect private branches). `main` is protected: PR only, required checks, no force-push, applies to admins.
+- Planner: scoring is `src/lib/planner.ts`, imported directly by the `generate-plan` Edge Function (runs as the caller, so RLS applies). `meal_plans.reshuffle_count` seeds the jitter (bumped by `start_plan_run()`). Leftover entries (`leftover_of`) copy and follow their source recipe via triggers; the M5 grocery sync must skip them. "Suggest week" also reshuffles unlocked, hand-picked meals (not just empty slots), as the UI says.
+- Known M4 gaps (`TODO(v2)`): Suggest week and swapping to or from leftovers write in several steps, so a mid-way failure can leave part of the change saved (the app reports it); a transactional RPC needs a migration.
 - Local dev only — no hosted Supabase project is linked yet.
