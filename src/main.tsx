@@ -34,7 +34,12 @@ const forget = () => {
   queryClient.clear()
   void persister.removeClient()
 }
-supabase.auth.onAuthStateChange((event) => event === 'SIGNED_OUT' && forget())
+let signedOut = false
+supabase.auth.onAuthStateChange((event) => {
+  if (event !== 'SIGNED_OUT') return
+  signedOut = true
+  forget()
+})
 
 // Unsent ticks/adds: paused ones and ones mid-retry on weak signal.
 const unsent = () =>
@@ -60,8 +65,9 @@ createRoot(document.getElementById('root')!).render(
       // the app stays hidden until onSuccess settles, and with no signal these wait indefinitely.
       // Failures show on the list screen, so errors here need no handling.
       onSuccess={() => {
-        // A sign-out during the restore would otherwise be undone by it.
-        void supabase.auth.getSession().then(({ data }) => !data.session && forget())
+        // A sign-out during the restore would otherwise be undone by it. Only a real sign-out:
+        // a login that can't be renewed with no signal must keep the list and unsent ticks.
+        if (signedOut) forget()
         void Promise.allSettled(unsent().map((m) => m.continue())).then(() =>
           queryClient.invalidateQueries(),
         )
