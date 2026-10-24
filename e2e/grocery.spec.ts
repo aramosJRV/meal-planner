@@ -1,0 +1,134 @@
+import { expect, test, type Page } from '@playwright/test'
+import { api, newHousehold } from './helpers.ts'
+
+const WEEK = '2026-10-26' // a Monday; households start weeks on Monday by default
+const line = (name: string, quantity: number | null, unit_code: string | null) => ({
+  raw_text: `${quantity ?? ''} ${unit_code ?? ''} ${name}`.trim(),
+  name,
+  canonical_name: name.toLowerCase(),
+  quantity,
+  unit_code,
+  note: null,
+})
+const item = (page: Page, name: string) => page.getByRole('listitem').filter({ hasText: name })
+// The tick shows a moment after the click (optimistic update), so click and wait rather than check().
+const tick = async (page: Page, name: string) => {
+  await item(page, name).getByRole('checkbox').click()
+  await expect(item(page, name).getByRole('checkbox')).toBeChecked()
+}
+const checked = async (page: Page, name: string) =>
+  (
+    (await api(page, `rest/v1/grocery_items?select=checked&display_name=eq.${name}`)).body as {
+      checked: boolean
+    }[]
+  )[0]?.checked
+
+test('build the shopping list from the plan, tick, add, work offline and follow plan changes', async ({
+  page,
+  context,
+}) => {
+  await newHousehold(page, 'grocery')
+  const [{ id }] = (await api(page, 'rest/v1/households?select=id')).body as { id: string }[]
+  const recipe = async (title: string, lines: unknown[]) =>
+    (
+      await api(page, 'rest/v1/rpc/save_recipe', {
+        p_household_id: id,
+        p_recipe_id: null,
+        p_recipe: { title, base_servings: 4, meal_types: ['dinner'] },
+        p_lines: lines,
+        p_steps: [],
+      })
+    ).body as string
+  const garlicPasta = await recipe('Garlic pasta', [
+    line('Pasta', 400, 'g'),
+    line('Garlic', 2, 'clove'),
+    line('Salt', 1, 'tsp'), // pantry staple: never on the list
+  ])
+  const tomatoPasta = await recipe('Tomato pasta', [
+    line('Pasta', 200, 'g'),
+    line('Parmesan', null, null),
+  ])
+
+  // Mon: garlic pasta for 4. Tue: tomato pasta for 2. Wed: Tuesday's leftovers (adds nothing).
+  expect(
+    (await api(page, 'rest/v1/meal_plans', { household_id: id, week_start: WEEK })).status,
+  ).toBe(201)
+  const [{ id: planId }] = (await api(page, `rest/v1/meal_plans?select=id&week_start=eq.${WEEK}`))
+    .body as { id: string }[]
+  const entry = { meal_plan_id: planId, household_id: id, slot: 'dinner' }
+  await api(page, 'rest/v1/meal_plan_entries', [
+    { ...entry, date: '2026-10-26', recipe_id: garlicPasta, servings: 4 },
+    { ...entry, date: '2026-10-27', recipe_id: tomatoPasta, servings: 2 },
+  ])
+  const [{ id: tuesday }] = (
+    await api(page, `rest/v1/meal_plan_entries?select=id&date=eq.2026-10-27`)
+  ).body as { id: string }[]
+  await api(page, 'rest/v1/meal_plan_entries', {
+    ...entry,
+    date: '2026-10-28',
+    recipe_id: tomatoPasta,
+    servings: 2,
+    leftover_of: tuesday,
+  })
+
+  await page.goto(`/#/list/${WEEK}`)
+  await expect(page.getByRole('heading', { name: 'Shopping list' })).toBeVisible()
+  await expect(page.getByText('Nothing on the list yet')).toBeVisible()
+  await page.getByRole('button', { name: 'Refresh list' }).click()
+
+  // 400 g + 200 g × 2/4 = 500 g; leftovers and salt add nothing; parmesan has no amount.
+  await expect(item(page, 'Pasta')).toContainText('500 g')
+  await expect(item(page, 'Garlic')).toContainText('2 cloves')
+  await expect(item(page, 'Parmesan')).toBeVisible()
+  await expect(page.getByText('Salt')).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Fruit & veg' })).toContainText('Garlic')
+  await expect(page.getByRole('region', { name: 'Pantry' })).toContainText('Pasta')
+
+  await tick(page, 'Pasta')
+  await expect.poll(() => checked(page, 'Pasta')).toBe(true)
+
+  await page.getByLabel('Add an item').fill('Dishwasher tablets')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect(item(page, 'Dishwasher tablets')).toBeVisible()
+  await expect.poll(() => checked(page, 'Dishwasher tablets')).toBe(false)
+
+  // Offline: the tick shows straight away and is sent once the connection is back.
+  await context.setOffline(true)
+  await tick(page, 'Garlic')
+  await context.setOffline(false)
+  await expect.poll(() => checked(page, 'Garlic')).toBe(true)
+
+  // Plan changes update the list on their own: Tuesday for 3 → 400 g + 150 g.
+  await page.goto(`/#/week/${WEEK}`)
+  await page
+    .getByTestId('slot-2026-10-27-dinner')
+    .getByRole('button', { name: 'More servings' })
+    .click()
+  await expect(page.getByTestId('slot-2026-10-27-dinner')).toContainText('Serves 3')
+  await page.goto(`/#/list/${WEEK}`)
+  await expect(item(page, 'Pasta')).toContainText('550 g', { timeout: 10_000 })
+  await expect(item(page, 'Pasta').getByRole('checkbox')).toBeChecked()
+
+  // Drop Monday: ticked garlic stays, greyed; manual items are untouched.
+  await page.goto(`/#/week/${WEEK}`)
+  await page.getByTestId('slot-2026-10-26-dinner').getByRole('button', { name: 'Remove' }).click()
+  await expect(page.getByTestId('slot-2026-10-26-dinner')).toContainText('Nothing yet')
+  await page.goto(`/#/list/${WEEK}`)
+  await expect(item(page, 'Pasta')).toContainText('150 g', { timeout: 10_000 })
+  await expect(item(page, 'Garlic')).toContainText('No longer in the plan')
+  await expect(item(page, 'Dishwasher tablets')).toBeVisible()
+})
+
+test('sync-grocery-list refuses another household and bad input', async ({ page }) => {
+  await newHousehold(page, 'grocery-guard')
+  const bad = await api(page, 'functions/v1/sync-grocery-list', {
+    household_id: 'nope',
+    week_start: WEEK,
+  })
+  expect(bad.status).toBe(400)
+  const other = await api(page, 'functions/v1/sync-grocery-list', {
+    household_id: '00000000-0000-0000-0000-000000000000',
+    week_start: WEEK,
+  })
+  expect(other.status).toBe(403)
+})

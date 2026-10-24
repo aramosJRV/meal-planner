@@ -1,5 +1,5 @@
 // Grocery list merge (DESIGN.md §7): plan entries → desired items → diff against the saved list.
-import { UNITS, convert, scale, toDisplay } from './units'
+import { UNITS, convert, scale, toDisplay } from './units.ts'
 
 export type Quantity = { qty: number; unit: string }
 

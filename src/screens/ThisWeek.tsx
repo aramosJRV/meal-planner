@@ -14,6 +14,7 @@ import {
   usePlanChange,
   useWeek,
 } from './planData'
+import { syncSoon } from './groceryData'
 import Screen from './Screen'
 
 const label = 'text-xs font-semibold tracking-[0.14em] uppercase'
@@ -40,7 +41,10 @@ export default function ThisWeek({
   const suggest = useMutation({
     mutationFn: () =>
       generate({ household_id: household.id, week_start: weekStart, scope: 'week' }),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['week', household.id, weekStart] }),
+    onSettled: () => {
+      syncSoon(queryClient, household.id, weekStart)
+      return queryClient.invalidateQueries({ queryKey: ['week', household.id, weekStart] })
+    },
   })
 
   const at = new Map((week.data ?? []).map((e) => [`${e.date}|${e.slot}`, e]))
@@ -63,6 +67,9 @@ export default function ThisWeek({
           Next →
         </a>
       </div>
+      <a href={`#/list/${weekStart}`} className={action}>
+        Shopping list for this week →
+      </a>
 
       <div className="flex flex-col gap-2">
         <Button onClick={() => suggest.mutate()} disabled={suggest.isPending || week.isPending}>
@@ -88,7 +95,7 @@ export default function ThisWeek({
         )}
       </div>
 
-      {week.isError && (
+      {week.isError && !week.data && (
         <p role="alert" className="text-destructive text-sm">
           Couldn't load this week. Please reload the app.
         </p>
