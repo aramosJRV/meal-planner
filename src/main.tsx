@@ -6,6 +6,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { supabase } from './lib/supabase'
 import { registerGroceryMutations } from './screens/groceryData'
 
 const WEEK = 7 * 86_400_000
@@ -22,11 +23,25 @@ const queryClient = new QueryClient({
 registerGroceryMutations(queryClient)
 
 // Saved to IndexedDB so the household, the week, viewed recipes and the shopping list open
-// with no signal. Sign-out clears the cache, which clears the saved copy too.
+// with no signal.
 const PERSISTED = new Set(['households', 'week', 'recipe', 'grocery'])
 const persister = createAsyncStoragePersister({
   storage: { getItem: get, setItem: set, removeItem: del },
 })
+
+// However the session ends (sign-out here or elsewhere, expired login), drop the saved copy.
+supabase.auth.onAuthStateChange((event) => {
+  if (event !== 'SIGNED_OUT') return
+  queryClient.clear()
+  void persister.removeClient()
+})
+
+// Unsent ticks/adds: paused ones and ones mid-retry on weak signal.
+const unsent = () =>
+  queryClient
+    .getMutationCache()
+    .getAll()
+    .filter((m) => m.state.status === 'pending')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -38,12 +53,18 @@ createRoot(document.getElementById('root')!).render(
         dehydrateOptions: {
           shouldDehydrateQuery: (q) =>
             q.state.status === 'success' && PERSISTED.has(q.queryKey[0] as string),
+          shouldDehydrateMutation: (m) => m.state.status === 'pending',
         },
       }}
-      // Send ticks/adds made offline before the app was closed, then catch up.
-      onSuccess={() =>
-        queryClient.resumePausedMutations().then(() => queryClient.invalidateQueries())
-      }
+      // Send ticks/adds left over from before the app was closed, then catch up. Not awaited:
+      // the app stays hidden until onSuccess settles, and with no signal these wait indefinitely.
+      // Failures show on the list screen, so errors here need no handling.
+      onSuccess={() => {
+        void Promise.allSettled(unsent().map((m) => m.continue())).then(() =>
+          queryClient.invalidateQueries(),
+        )
+      }}
+      onError={() => console.error('Could not restore the saved copy; starting fresh.')}
     >
       <App />
     </PersistQueryClientProvider>

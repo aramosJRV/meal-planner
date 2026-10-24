@@ -43,10 +43,11 @@ export function useGroceryList(householdId: string, weekStart: string) {
   })
 }
 
-export async function syncList(householdId: string, weekStart: string) {
+async function invokeSync(householdId: string, weekStart: string) {
   const { error } = await supabase.functions.invoke('sync-grocery-list', {
     body: { household_id: householdId, week_start: weekStart },
   })
+  if (error) console.error('grocery sync', error)
   if (error instanceof FunctionsHttpError)
     throw new GroceryError(
       (await error.context.json().catch(() => ({}))).error === 'forbidden'
@@ -57,7 +58,21 @@ export async function syncList(householdId: string, weekStart: string) {
     throw new GroceryError("Couldn't reach the server. Check your connection and try again.")
 }
 
+// One sync at a time per week on this phone, so an older plan can't land after a newer one.
+// TODO(v2): two phones syncing at the same moment can still apply out of order; the RPC
+// would need to check generated_at (migration). The next sync or screen open corrects it.
+const running = new Map<string, Promise<unknown>>()
+export function syncList(householdId: string, weekStart: string) {
+  const key = `${householdId}|${weekStart}`
+  const next = (running.get(key) ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => invokeSync(householdId, weekStart))
+  running.set(key, next)
+  return next
+}
+
 // Plan changes come in bursts (Suggest week, a few swaps), so wait for a quiet moment.
+// A failure here only logs; opening the list screen syncs again and shows any error.
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 export function syncSoon(queryClient: QueryClient, householdId: string, weekStart: string) {
   const key = `${householdId}|${weekStart}`
@@ -66,19 +81,22 @@ export function syncSoon(queryClient: QueryClient, householdId: string, weekStar
     key,
     setTimeout(() => {
       timers.delete(key)
-      // Failures only log: the list screen has Refresh, and the next plan change retries.
       syncList(householdId, weekStart)
         .then(() => queryClient.invalidateQueries({ queryKey: listKey(householdId, weekStart) }))
-        .catch((e) => console.error('grocery sync', e))
+        .catch(() => {})
     }, 1500),
   )
 }
 
-export type Tick = { key: unknown[]; id: string; checked: boolean }
+export type Tick = { key: unknown[]; id: string; name: string; checked: boolean }
 export type Add = { key: unknown[]; item: Item & { list_id: string; household_id: string } }
 
-// Ticks and manual adds queue while offline, survive an app restart (the cache is persisted,
-// and paused mutations resume from these defaults) and show straight away.
+// Network failures have no error code; anything else (a refused or missing row) won't fix itself.
+const isNetwork = (e: unknown) => !(e instanceof GroceryError) && !(e as { code?: string })?.code
+
+// Ticks and manual adds show straight away, wait out no signal or a weak one, and survive an
+// app restart (main.tsx saves unsent ones and sends them on start). Both are safe to resend.
+// Failures show on the list screen through useMutationState, even after a restart.
 export function registerGroceryMutations(queryClient: QueryClient) {
   const patch = (key: unknown[], f: (items: Item[]) => Item[]) =>
     queryClient.setQueryData<List | null>(key, (list) =>
@@ -86,19 +104,32 @@ export function registerGroceryMutations(queryClient: QueryClient) {
     )
   const refetch = (_d: unknown, _e: unknown, v: { key: unknown[] }) =>
     queryClient.invalidateQueries({ queryKey: v.key })
-
-  // offlineFirst only pauses retries, so retry is what makes a failed send wait for the signal.
-  const offline = { networkMode: 'offlineFirst', retry: 3 } as const
+  const offline = {
+    networkMode: 'offlineFirst',
+    retry: (_count: number, e: unknown) => isNetwork(e),
+    retryDelay: (count: number) => Math.min(1000 * 2 ** count, 10_000),
+  } as const
 
   queryClient.setMutationDefaults(['grocery', 'tick'], {
     ...offline,
     // Last write wins (DESIGN.md §8): just set the value this person chose.
     mutationFn: async ({ id, checked }: Tick) => {
-      const { error } = await supabase.from('grocery_items').update({ checked }).eq('id', id)
+      const { data, error } = await supabase
+        .from('grocery_items')
+        .update({ checked })
+        .eq('id', id)
+        .select('id')
       if (error) throw error
+      if (!data.length) throw new GroceryError('removed')
     },
-    onMutate: ({ key, id, checked }: Tick) =>
-      patch(key, (items) => items.map((i) => (i.id === id ? { ...i, checked } : i))),
+    onMutate: async ({ key, id, checked }: Tick) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      patch(key, (items) => items.map((i) => (i.id === id ? { ...i, checked } : i)))
+    },
+    onError: (e: unknown, { key, id, checked }: Tick) => {
+      console.error('grocery tick', e)
+      patch(key, (items) => items.map((i) => (i.id === id ? { ...i, checked: !checked } : i)))
+    },
     onSettled: refetch,
   })
 
@@ -115,7 +146,14 @@ export function registerGroceryMutations(queryClient: QueryClient) {
         )
       if (error) throw error
     },
-    onMutate: ({ key, item }: Add) => patch(key, (items) => [...items, item]),
+    onMutate: async ({ key, item }: Add) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      patch(key, (items) => [...items, item])
+    },
+    onError: (e: unknown, { key, item }: Add) => {
+      console.error('grocery add', e)
+      patch(key, (items) => items.filter((i) => i.id !== item.id))
+    },
     onSettled: refetch,
   })
 }

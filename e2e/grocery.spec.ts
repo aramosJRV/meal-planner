@@ -73,7 +73,7 @@ test('build the shopping list from the plan, tick, add, work offline and follow 
 
   await page.goto(`/#/list/${WEEK}`)
   await expect(page.getByRole('heading', { name: 'Shopping list' })).toBeVisible()
-  await expect(page.getByText('Nothing on the list yet')).toBeVisible()
+  // Opening the list builds it; Refresh list does the same on demand.
   await page.getByRole('button', { name: 'Refresh list' }).click()
 
   // 400 g + 200 g × 2/4 = 500 g; leftovers and salt add nothing; parmesan has no amount.
@@ -92,11 +92,34 @@ test('build the shopping list from the plan, tick, add, work offline and follow 
   await expect(item(page, 'Dishwasher tablets')).toBeVisible()
   await expect.poll(() => checked(page, 'Dishwasher tablets')).toBe(false)
 
-  // Offline: the tick shows straight away and is sent once the connection is back.
+  // A tick the server can't apply (the item changed meanwhile) is undone and named.
+  await page.route('http://127.0.0.1:54321/rest/v1/grocery_items?id=eq.*', (route) =>
+    route.request().method() === 'PATCH' ? route.fulfill({ json: [] }) : route.continue(),
+  )
+  await item(page, 'Parmesan').getByRole('checkbox').click()
+  await expect(page.getByRole('alert')).toContainText("Couldn't save the change to Parmesan")
+  await expect(item(page, 'Parmesan').getByRole('checkbox')).not.toBeChecked()
+  await page.unrouteAll()
+
+  // Offline: a tick and a new item show straight away, survive the app being closed and
+  // reopened while the server is still out of reach, and are sent once it's back.
   await context.setOffline(true)
+  await expect(page.getByRole('status')).toContainText('Offline')
   await tick(page, 'Garlic')
+  await page.getByLabel('Add an item').fill('Batteries')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect(page.getByRole('status')).toContainText('2 changes will be sent')
+  await page.waitForTimeout(1500) // the saved copy is written at most once a second
+  await page.route('http://127.0.0.1:54321/**', (route) => route.abort())
   await context.setOffline(false)
-  await expect.poll(() => checked(page, 'Garlic')).toBe(true)
+  await page.reload()
+  await expect(item(page, 'Garlic').getByRole('checkbox')).toBeChecked()
+  await expect(item(page, 'Batteries')).toBeVisible()
+  await expect(page.getByRole('status')).toContainText('Sending 2 changes')
+  await page.unroute('http://127.0.0.1:54321/**')
+  await expect.poll(() => checked(page, 'Garlic'), { timeout: 20_000 }).toBe(true)
+  await expect.poll(() => checked(page, 'Batteries'), { timeout: 20_000 }).toBe(false)
+  await expect(page.getByRole('status')).toHaveCount(0)
 
   // Plan changes update the list on their own: Tuesday for 3 → 400 g + 150 g.
   await page.goto(`/#/week/${WEEK}`)

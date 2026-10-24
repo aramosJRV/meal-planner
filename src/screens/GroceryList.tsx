@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { onlineManager, useMutation, useMutationState, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { weekStartFor } from '@/lib/planner'
@@ -32,8 +32,11 @@ const AISLES: [string, string][] = [
   ['other', 'Other'],
 ]
 
+const changes = (n: number) => (n === 1 ? '1 change' : `${n} changes`)
+
 const amounts = (item: Item) =>
   item.quantities
+    .filter((q) => typeof q?.qty === 'number' && typeof q.unit === 'string')
     .map((q) => [formatQuantity(q.qty, q.unit), unitLabel(q.unit, q.qty)].filter(Boolean).join(' '))
     .join(' + ')
 
@@ -58,16 +61,42 @@ export default function GroceryList({
   // mutationFn and callbacks come from registerGroceryMutations (main.tsx).
   const tick = useMutation<void, Error, Tick>({ mutationKey: ['grocery', 'tick'] })
   const add = useMutation<void, Error, Add>({ mutationKey: ['grocery', 'add'] })
+  const online = useSyncExternalStore(onlineManager.subscribe.bind(onlineManager), () =>
+    onlineManager.isOnline(),
+  )
+  // Every grocery change, including ones resumed after a restart that no button is watching.
+  const waiting = useMutationState({ filters: { mutationKey: ['grocery'], status: 'pending' } })
+  const failed = useMutationState({
+    filters: { mutationKey: ['grocery'], status: 'error' },
+    select: (m) => {
+      const v = m.state.variables as Partial<Tick & Add>
+      return v.name ?? v.item?.display_name ?? 'an item'
+    },
+  })
+
+  // Catch up on plan changes made elsewhere, or a sync that didn't finish.
+  useEffect(() => {
+    if (onlineManager.isOnline()) refresh.mutate()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opening of this week's list
+  }, [])
 
   // A tick on another phone shows here (DESIGN.md §8).
   useEffect(() => {
     if (!listId) return
+    const refetch = () =>
+      queryClient.invalidateQueries({ queryKey: listKey(household.id, weekStart) })
     const channel = supabase
       .channel(`grocery:${listId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'grocery_items', filter: `list_id=eq.${listId}` },
-        () => queryClient.invalidateQueries({ queryKey: listKey(household.id, weekStart) }),
+        refetch,
+      )
+      // Deletes carry only the id, so they can't be filtered by list; any one triggers a refetch.
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'grocery_items' },
+        refetch,
       )
       .subscribe()
     return () => void supabase.removeChannel(channel)
@@ -103,14 +132,34 @@ export default function GroceryList({
         )}
       </div>
 
-      {list.isError && (
+      {(!online || waiting.length > 0) && (
+        <p role="status" className="bg-muted px-3 py-2 text-sm">
+          {online
+            ? `Sending ${changes(waiting.length)}…`
+            : `Offline. ${waiting.length ? changes(waiting.length) : 'Ticks and new items'} will be sent when you're back online.`}
+        </p>
+      )}
+      {failed.length > 0 && (
+        <p role="alert" className="text-destructive text-sm">
+          Couldn't save the change to {[...new Set(failed)].join(', ')}. It may have changed on the
+          list. Please check and try again.
+        </p>
+      )}
+      {list.isError && !list.data && (
         <p role="alert" className="text-destructive text-sm">
           Couldn't load the list. Check your connection and try again.
         </p>
       )}
+      {list.fetchStatus === 'paused' && !list.data && (
+        <p className="text-muted-foreground text-sm">
+          No signal. The list will load when you're back online.
+        </p>
+      )}
       {list.isSuccess && !items.length && (
         <p className="text-muted-foreground font-serif text-xl italic">
-          Nothing on the list yet. Plan some meals, then refresh.
+          {listId
+            ? 'Nothing on the list yet. Plan some meals or add an item below.'
+            : 'Nothing on the list yet. Plan some meals, then tap Refresh list.'}
         </p>
       )}
 
@@ -132,7 +181,14 @@ export default function GroceryList({
                     type="checkbox"
                     className="size-5"
                     checked={item.checked}
-                    onChange={(e) => tick.mutate({ key, id: item.id, checked: e.target.checked })}
+                    onChange={(e) =>
+                      tick.mutate({
+                        key,
+                        id: item.id,
+                        name: item.display_name,
+                        checked: e.target.checked,
+                      })
+                    }
                   />
                   <span className="flex flex-1 flex-col">
                     <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
@@ -152,12 +208,6 @@ export default function GroceryList({
           </ul>
         </section>
       ))}
-
-      {(tick.isError || add.isError) && (
-        <p role="alert" className="text-destructive text-sm">
-          Couldn't save that change. Here's the latest list.
-        </p>
-      )}
 
       {listId && (
         <form
