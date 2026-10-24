@@ -65,7 +65,7 @@ test('suggest a week, lock, reshuffle, swap and plan leftovers', async ({ page }
   // Swap Wednesday for a chosen recipe.
   await slot(page, '2026-10-28').getByRole('link', { name: 'Swap' }).click()
   await expect(page.getByRole('heading', { name: 'Wednesday dinner' })).toBeVisible()
-  await page.getByRole('button', { name: /^Tacos/ }).click()
+  await page.getByRole('button', { name: 'Tacos', exact: true }).click()
   await expect(slot(page, '2026-10-28').getByRole('link').first()).toHaveText('Tacos')
 
   // Thursday becomes leftovers of Monday.

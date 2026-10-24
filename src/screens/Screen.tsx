@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 const TABS = [
   { key: 'week', label: 'This week', href: '#/' },
+  { key: 'list', label: 'Shopping', href: '#/list' },
   { key: 'recipes', label: 'Recipes', href: '#/recipes' },
   { key: 'settings', label: 'Settings', href: '#/settings' },
 ] as const
