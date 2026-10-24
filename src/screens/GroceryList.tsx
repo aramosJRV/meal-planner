@@ -9,6 +9,7 @@ import {
   type Add,
   GroceryError,
   type Item,
+  type List,
   listKey,
   syncList,
   type Tick,
@@ -92,11 +93,14 @@ export default function GroceryList({
         { event: '*', schema: 'public', table: 'grocery_items', filter: `list_id=eq.${listId}` },
         refetch,
       )
-      // Deletes carry only the id, so they can't be filtered by list; any one triggers a refetch.
+      // Deletes carry only the id, so they can't be filtered by list: refetch only for our items.
       .on(
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'grocery_items' },
-        refetch,
+        (p) => {
+          const list = queryClient.getQueryData<List | null>(listKey(household.id, weekStart))
+          if (list?.grocery_items.some((i) => i.id === p.old.id)) refetch()
+        },
       )
       .subscribe()
     return () => void supabase.removeChannel(channel)

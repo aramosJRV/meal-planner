@@ -108,18 +108,22 @@ test('build the shopping list from the plan, tick, add, work offline and follow 
   await tick(page, 'Garlic')
   await page.getByLabel('Add an item').fill('Batteries')
   await page.getByRole('button', { name: 'Add' }).click()
-  await expect(page.getByRole('status')).toContainText('2 changes will be sent')
+  await item(page, 'Parmesan').getByRole('checkbox').click() // tick, then change of mind
+  await item(page, 'Parmesan').getByRole('checkbox').click()
+  await expect(item(page, 'Parmesan').getByRole('checkbox')).not.toBeChecked()
+  await expect(page.getByRole('status')).toContainText('4 changes will be sent')
   await page.waitForTimeout(1500) // the saved copy is written at most once a second
   await page.route('http://127.0.0.1:54321/**', (route) => route.abort())
   await context.setOffline(false)
   await page.reload()
   await expect(item(page, 'Garlic').getByRole('checkbox')).toBeChecked()
   await expect(item(page, 'Batteries')).toBeVisible()
-  await expect(page.getByRole('status')).toContainText('Sending 2 changes')
+  await expect(page.getByRole('status')).toContainText('Sending 4 changes')
   await page.unroute('http://127.0.0.1:54321/**')
   await expect.poll(() => checked(page, 'Garlic'), { timeout: 20_000 }).toBe(true)
   await expect.poll(() => checked(page, 'Batteries'), { timeout: 20_000 }).toBe(false)
-  await expect(page.getByRole('status')).toHaveCount(0)
+  await expect(page.getByRole('status')).toHaveCount(0, { timeout: 20_000 })
+  expect(await checked(page, 'Parmesan')).toBe(false) // sent in order: the untick wins
 
   // Plan changes update the list on their own: Tuesday for 3 → 400 g + 150 g.
   await page.goto(`/#/week/${WEEK}`)

@@ -106,6 +106,8 @@ export function registerGroceryMutations(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: v.key })
   const offline = {
     networkMode: 'offlineFirst',
+    // One at a time, in order, so a tick then untick made offline lands as an untick.
+    scope: { id: 'grocery' },
     retry: (_count: number, e: unknown) => isNetwork(e),
     retryDelay: (count: number) => Math.min(1000 * 2 ** count, 10_000),
   } as const
@@ -123,6 +125,10 @@ export function registerGroceryMutations(queryClient: QueryClient) {
       if (!data.length) throw new GroceryError('removed')
     },
     onMutate: async ({ key, id, checked }: Tick) => {
+      // A new tick supersedes an earlier failed one, so its message goes.
+      const cache = queryClient.getMutationCache()
+      for (const m of cache.findAll({ mutationKey: ['grocery', 'tick'], status: 'error' }))
+        if ((m.state.variables as Tick).id === id) cache.remove(m)
       await queryClient.cancelQueries({ queryKey: key })
       patch(key, (items) => items.map((i) => (i.id === id ? { ...i, checked } : i)))
     },

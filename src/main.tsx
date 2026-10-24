@@ -30,11 +30,11 @@ const persister = createAsyncStoragePersister({
 })
 
 // However the session ends (sign-out here or elsewhere, expired login), drop the saved copy.
-supabase.auth.onAuthStateChange((event) => {
-  if (event !== 'SIGNED_OUT') return
+const forget = () => {
   queryClient.clear()
   void persister.removeClient()
-})
+}
+supabase.auth.onAuthStateChange((event) => event === 'SIGNED_OUT' && forget())
 
 // Unsent ticks/adds: paused ones and ones mid-retry on weak signal.
 const unsent = () =>
@@ -60,6 +60,8 @@ createRoot(document.getElementById('root')!).render(
       // the app stays hidden until onSuccess settles, and with no signal these wait indefinitely.
       // Failures show on the list screen, so errors here need no handling.
       onSuccess={() => {
+        // A sign-out during the restore would otherwise be undone by it.
+        void supabase.auth.getSession().then(({ data }) => !data.session && forget())
         void Promise.allSettled(unsent().map((m) => m.continue())).then(() =>
           queryClient.invalidateQueries(),
         )
