@@ -2,6 +2,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Slot } from '@/lib/planner'
 import { supabase } from '@/lib/supabase'
+import { syncSoon } from './groceryData'
 
 export type Household = {
   id: string
@@ -68,7 +69,10 @@ export function usePlanChange<T>(
   return useMutation({
     mutationFn: fn,
     onError: (e) => console.error('plan change', e),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['week', householdId, weekStart] }),
+    onSettled: () => {
+      syncSoon(queryClient, householdId, weekStart)
+      return queryClient.invalidateQueries({ queryKey: ['week', householdId, weekStart] })
+    },
   })
 }
 

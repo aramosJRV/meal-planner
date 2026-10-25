@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import ChooseMeal from '@/screens/ChooseMeal'
+import GroceryList from '@/screens/GroceryList'
 import ImportRecipe from '@/screens/ImportRecipe'
 import Onboarding from '@/screens/Onboarding'
 import type { Household } from '@/screens/planData'
@@ -48,6 +49,14 @@ function Routes(props: { household: Household; userId: string }) {
   const householdId = props.household.id
   const [section, id, action, slot] = useRoute()
   if (section === 'settings') return <Settings {...props} />
+  if (section === 'list')
+    return (
+      <GroceryList
+        key={id}
+        household={props.household}
+        weekStart={DATE.test(id ?? '') ? id : undefined}
+      />
+    )
   if (section === 'week' && DATE.test(id ?? '') && DATE.test(action ?? '') && SLOT.test(slot ?? ''))
     return (
       <ChooseMeal
@@ -96,7 +105,8 @@ export default function App() {
   if (session === undefined) return null
   if (!session) return <SignIn />
   if (households.isPending) return null
-  if (households.isError)
+  // Offline with a saved copy: carry on with it rather than showing an error.
+  if (households.isError && !households.data)
     return (
       <main className="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-4 p-6">
         <p role="alert">Couldn't load your household.</p>
