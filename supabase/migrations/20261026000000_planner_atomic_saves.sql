@@ -39,7 +39,7 @@ revoke execute on function public.apply_plan_picks(uuid, jsonb) from public, ano
 grant execute on function public.apply_plan_picks(uuid, jsonb) to authenticated;
 
 -- ── Replace what's in one slot ────────────────────────────────────────────
--- Used when a slot changes to or from leftovers: the old entry (if any) is removed and
+-- Used when filling a slot or swapping to or from leftovers: the old entry (if any) is removed and
 -- the new one added together. Creates the week's plan if needed. Raises P0002 when the
 -- old entry was removed, moved or locked meanwhile, and 23505 when the slot was filled.
 -- Returns the new entry's id.

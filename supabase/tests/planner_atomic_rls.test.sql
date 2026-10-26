@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B; plus a signed-out user.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(21);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local'),
@@ -91,6 +91,18 @@ select throws_ok(format($$ select public.replace_plan_entry(%L, '2026-10-26', '2
   '23505', null, 'a slot filled meanwhile is not overwritten');
 select is((select count(*)::int from public.meal_plans where household_id = pg_temp.v('ha')), 1,
   'no extra plan was created');
+-- Picks never touch leftovers, but changing a meal still carries its leftovers along.
+select is(public.apply_plan_picks(pg_temp.v('pa'), jsonb_build_object('update', jsonb_build_array(
+  jsonb_build_object('id', pg_temp.v('e1'), 'recipe_id', pg_temp.v('ra1'), 'reason', 'Back'),
+  jsonb_build_object('id', pg_temp.v('e3'), 'recipe_id', pg_temp.v('ra2'), 'reason', 'Nope')))),
+  1, 'picks skip leftovers');
+select is((select (recipe_id, reason)::text from public.meal_plan_entries where id = pg_temp.v('e3')),
+  (pg_temp.v('ra1'), null::text)::text, '… which follow their meal''s new recipe');
+-- Filling a slot in a week with no plan yet creates the plan too.
+select lives_ok(format($$ select public.replace_plan_entry(%L, '2026-11-02', '2026-11-02', 'dinner', null, %L, 4, null) $$,
+  pg_temp.v('ha'), pg_temp.v('ra2')), 'member fills a slot in a new week');
+select is((select count(*)::int from public.meal_plan_entries e join public.meal_plans p on p.id = e.meal_plan_id
+  where p.household_id = pg_temp.v('ha') and p.week_start = '2026-11-02'), 1, '… and its plan is created');
 
 select pg_temp.login('00000000-0000-0000-0000-00000000000b');
 select throws_ok(format($$ select public.replace_plan_entry(%L, '2026-10-26', '2026-10-29', 'dinner', %L, %L, 4, null) $$,
