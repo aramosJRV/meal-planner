@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
 import type { Quantity } from '@/lib/groceryMerge'
+import { canonicalName } from '@/lib/ingredientLine'
 import { supabase } from '@/lib/supabase'
 
 export type Item = {
@@ -90,12 +91,36 @@ export function syncSoon(queryClient: QueryClient, householdId: string, weekStar
 
 export type Tick = { key: unknown[]; id: string; name: string; checked: boolean }
 export type Add = { key: unknown[]; item: Item & { list_id: string; household_id: string } }
+export type Rename = { key: unknown[]; id: string; name: string; to: string; household_id: string }
+export type Remove = { key: unknown[]; id: string; name: string }
 
 // Network failures have no error code; anything else (a refused or missing row) won't fix itself.
 const isNetwork = (e: unknown) => !(e instanceof GroceryError) && !(e as { code?: string })?.code
 
-// Ticks and manual adds show straight away, wait out no signal or a weak one, and survive an
-// app restart (main.tsx saves unsent ones and sends them on start). Both are safe to resend.
+// With no session the request would go out as nobody and be refused for good. That happens
+// while an expired login waits to be renewed after the signal comes back, so throw a plain
+// (network-like) error and retry until it renews; a real sign-out clears the queue (main.tsx).
+async function signedIn() {
+  const { data } = await supabase.auth.getSession()
+  if (!data.session) throw new Error('waiting for sign-in')
+}
+
+// The same aisle a plan item gets: from the matching ingredient (global or this household's).
+export async function aisleFor(householdId: string, name: string) {
+  const { data, error } = await supabase
+    .from('ingredients')
+    .select('aisle_category')
+    .eq('canonical_name', canonicalName(name))
+    .or(`household_id.is.null,household_id.eq.${householdId}`)
+    .order('household_id', { nullsFirst: true })
+    .limit(1)
+  if (error) throw error
+  return (data[0]?.aisle_category as string | undefined) ?? 'other'
+}
+
+// Ticks and manual adds, renames and removals show straight away, wait out no signal or a weak
+// one, and survive an app restart (main.tsx saves unsent ones and sends them on start). All are
+// safe to resend. Renames and removals only ever touch manual items, never plan ones.
 // Failures show on the list screen through useMutationState, even after a restart.
 export function registerGroceryMutations(queryClient: QueryClient) {
   const patch = (key: unknown[], f: (items: Item[]) => Item[]) =>
@@ -116,6 +141,7 @@ export function registerGroceryMutations(queryClient: QueryClient) {
     ...offline,
     // Last write wins (DESIGN.md §8): just set the value this person chose.
     mutationFn: async ({ id, checked }: Tick) => {
+      await signedIn()
       const { data, error } = await supabase
         .from('grocery_items')
         .update({ checked })
@@ -143,11 +169,13 @@ export function registerGroceryMutations(queryClient: QueryClient) {
     ...offline,
     // The id is made on the phone, so a retry after a dropped connection can't add it twice.
     mutationFn: async ({ item }: Add) => {
+      await signedIn()
       const { id, list_id, household_id, display_name } = item
+      const aisle_category = await aisleFor(household_id, display_name)
       const { error } = await supabase
         .from('grocery_items')
         .upsert(
-          { id, list_id, household_id, display_name },
+          { id, list_id, household_id, display_name, aisle_category },
           { onConflict: 'id', ignoreDuplicates: true },
         )
       if (error) throw error
@@ -160,6 +188,52 @@ export function registerGroceryMutations(queryClient: QueryClient) {
       console.error('grocery add', e)
       patch(key, (items) => items.filter((i) => i.id !== item.id))
     },
+    onSettled: refetch,
+  })
+
+  queryClient.setMutationDefaults(['grocery', 'rename'], {
+    ...offline,
+    mutationFn: async ({ id, to, household_id }: Rename) => {
+      await signedIn()
+      const aisle_category = await aisleFor(household_id, to)
+      const { data, error } = await supabase
+        .from('grocery_items')
+        .update({ display_name: to, aisle_category })
+        .eq('id', id)
+        .eq('source', 'manual')
+        .select('id')
+      if (error) throw error
+      if (!data.length) throw new GroceryError('removed')
+    },
+    onMutate: async ({ key, id, to }: Rename) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      patch(key, (items) => items.map((i) => (i.id === id ? { ...i, display_name: to } : i)))
+    },
+    onError: (e: unknown, { key, id, name }: Rename) => {
+      console.error('grocery rename', e)
+      patch(key, (items) => items.map((i) => (i.id === id ? { ...i, display_name: name } : i)))
+    },
+    onSettled: refetch,
+  })
+
+  queryClient.setMutationDefaults(['grocery', 'remove'], {
+    ...offline,
+    // Already gone counts as done, so a resend is harmless.
+    mutationFn: async ({ id }: Remove) => {
+      await signedIn()
+      const { error } = await supabase
+        .from('grocery_items')
+        .delete()
+        .eq('id', id)
+        .eq('source', 'manual')
+      if (error) throw error
+    },
+    onMutate: async ({ key, id }: Remove) => {
+      await queryClient.cancelQueries({ queryKey: key })
+      patch(key, (items) => items.filter((i) => i.id !== id))
+    },
+    // The refetch brings the item back.
+    onError: (e: unknown) => console.error('grocery remove', e),
     onSettled: refetch,
   })
 }
