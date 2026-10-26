@@ -31,7 +31,8 @@ test('suggest a week, lock, reshuffle, swap and plan leftovers', async ({ page }
     ).toBe(200)
 
   await page.goto(`/#/week/${WEEK}`)
-  await expect(page.getByRole('heading', { name: 'Week of 26 Oct' })).toBeVisible()
+  // The title is "This week" when today falls in that week.
+  await expect(page.getByRole('heading', { name: /^(Week of 26 Oct|This week)$/ })).toBeVisible()
   await expect(slot(page, WEEK)).toContainText('Nothing yet')
 
   await page.getByRole('button', { name: 'Suggest week' }).click()

@@ -15,7 +15,7 @@ create function pg_temp.login(uid uuid) returns void language sql as $$
 $$;
 create function pg_temp.v(k text) returns uuid language sql as $$ select current_setting('test.' || k)::uuid $$;
 create function pg_temp.recipe_at(d date) returns uuid language sql as $$
-  select recipe_id from public.meal_plan_entries where date = d and slot = 'dinner'
+  select recipe_id from public.meal_plan_entries where meal_plan_id = pg_temp.v('pa') and date = d and slot = 'dinner'
 $$;
 
 select pg_temp.login('00000000-0000-0000-0000-00000000000a');
@@ -34,8 +34,8 @@ select set_config('test.pa', (select id::text from public.meal_plans where house
 insert into public.meal_plan_entries (meal_plan_id, household_id, date, slot, recipe_id, servings, locked) values
   (pg_temp.v('pa'), pg_temp.v('ha'), '2026-10-26', 'dinner', pg_temp.v('ra1'), 4, false),
   (pg_temp.v('pa'), pg_temp.v('ha'), '2026-10-27', 'dinner', pg_temp.v('ra1'), 4, true);
-select set_config('test.e1', (select id::text from public.meal_plan_entries where date = '2026-10-26'), true);
-select set_config('test.e2', (select id::text from public.meal_plan_entries where date = '2026-10-27'), true);
+select set_config('test.e1', (select id::text from public.meal_plan_entries where meal_plan_id = pg_temp.v('pa') and date = '2026-10-26'), true);
+select set_config('test.e2', (select id::text from public.meal_plan_entries where meal_plan_id = pg_temp.v('pa') and date = '2026-10-27'), true);
 
 -- ── apply_plan_picks ─────────────────────────────────────────────────────
 select pg_temp.login('00000000-0000-0000-0000-0000000000a2');
@@ -73,8 +73,8 @@ reset role;
 select pg_temp.login('00000000-0000-0000-0000-0000000000a2');
 -- Wednesday becomes leftovers of Monday.
 select set_config('test.e3', public.replace_plan_entry(pg_temp.v('ha'), '2026-10-26', '2026-10-28', 'dinner',
-  (select id from public.meal_plan_entries where date = '2026-10-28'), pg_temp.v('ra1'), 2, pg_temp.v('e1'))::text, true);
-select is((select leftover_of from public.meal_plan_entries where date = '2026-10-28'), pg_temp.v('e1'),
+  (select id from public.meal_plan_entries where meal_plan_id = pg_temp.v('pa') and date = '2026-10-28'), pg_temp.v('ra1'), 2, pg_temp.v('e1'))::text, true);
+select is((select leftover_of from public.meal_plan_entries where meal_plan_id = pg_temp.v('pa') and date = '2026-10-28'), pg_temp.v('e1'),
   'member swaps a meal for leftovers');
 -- Turning Monday into leftovers of Tuesday fails only after the old meal (and its leftovers)
 -- were removed: nothing is saved.
