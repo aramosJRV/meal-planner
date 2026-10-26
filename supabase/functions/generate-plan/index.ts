@@ -25,11 +25,6 @@ const serverError = (step: string, cause: unknown) => {
   console.error(`generate-plan: ${step}`, cause)
   return fail('server_error', 500)
 }
-// Some picks may already be saved: say so, so the app doesn't claim nothing changed.
-const partial = (step: string, cause: unknown, changed: number) => {
-  console.error(`generate-plan: ${step} (after ${changed} changes)`, cause)
-  return fail(changed ? 'partly_saved' : 'server_error', 500)
-}
 
 type Entry = {
   id: string
@@ -144,49 +139,33 @@ export default {
       seed: planSeed(householdId, weekStart, counter),
     })
 
-    // TODO(v2): apply all picks in one transaction (needs an RPC + migration). Today a failure
-    // part-way leaves earlier picks applied; locked meals and leftovers are never touched.
+    // All picks are saved together or not at all; locked meals and leftovers are never touched,
+    // and a slot someone filled meanwhile keeps their choice.
     const byKey = new Map(targets.map((t) => [`${t.date}|${t.slot}`, t.entry]))
     let unfilled = 0
-    let changed = 0
-    const inserts = []
+    const update = []
+    const insert = []
     for (const p of picks) {
-      const entry = byKey.get(`${p.date}|${p.slot}`)
       if (!p.recipe_id) {
         unfilled++
         continue
       }
-      if (entry) {
-        if (entry.recipe_id === p.recipe_id) continue
-        const { data, error } = await db
-          .from('meal_plan_entries')
-          .update({ recipe_id: p.recipe_id, reason: p.reason })
-          .eq('id', entry.id)
-          .eq('locked', false) // someone may have locked it meanwhile
-          .select('id')
-        if (error) return partial('update entry', error, changed)
-        changed += data.length
-      } else {
-        inserts.push({
-          meal_plan_id: planId,
-          household_id: householdId,
+      const entry = byKey.get(`${p.date}|${p.slot}`)
+      if (entry) update.push({ id: entry.id, recipe_id: p.recipe_id, reason: p.reason })
+      else
+        insert.push({
           date: p.date,
           slot: p.slot,
           recipe_id: p.recipe_id,
           servings: servings.get(p.recipe_id) ?? 4,
           reason: p.reason,
         })
-      }
     }
-    if (inserts.length) {
-      // A slot someone filled meanwhile keeps their choice.
-      const { data, error } = await db
-        .from('meal_plan_entries')
-        .upsert(inserts, { onConflict: 'meal_plan_id,date,slot', ignoreDuplicates: true })
-        .select('id')
-      if (error) return partial('insert entries', error, changed)
-      changed += data.length
-    }
+    const { data: changed, error: applyError } = await db.rpc('apply_plan_picks', {
+      p_plan_id: planId,
+      p_picks: { update, insert },
+    })
+    if (applyError) return serverError('apply picks', applyError)
     return Response.json({ plan_id: planId, changed, unfilled })
   }),
 }
