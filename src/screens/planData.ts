@@ -35,7 +35,6 @@ const planErrors: Record<string, string> = {
   entry_locked: "That meal is locked or is leftovers, so it wasn't changed.",
   forbidden: "You're no longer in this household. Close and reopen the app.",
   not_found: "That meal was removed. Here's the latest week.",
-  partly_saved: 'Some meals changed before something went wrong. Check the week and try again.',
 }
 const STALE = "Someone else just changed that meal. Here's the latest week."
 
@@ -91,27 +90,9 @@ export async function generate(body: {
   return data
 }
 
-// The week's plan row, created on first use.
-export async function planId(householdId: string, weekStart: string) {
-  const { error: insertError } = await supabase
-    .from('meal_plans')
-    .upsert(
-      { household_id: householdId, week_start: weekStart },
-      { onConflict: 'household_id,week_start', ignoreDuplicates: true },
-    )
-  if (insertError) throw insertError
-  const { data, error } = await supabase
-    .from('meal_plans')
-    .select('id')
-    .eq('household_id', householdId)
-    .eq('week_start', weekStart)
-    .single()
-  if (error) throw error
-  return data.id as string
-}
-
 const check = ({ error }: { error: { code?: string } | null }) => {
-  if (error?.code === '23505') throw new PlanError(STALE) // slot filled meanwhile
+  // Slot filled, or the meal removed or locked, meanwhile.
+  if (error?.code === '23505' || error?.code === 'P0002') throw new PlanError(STALE)
   if (error) throw error
 }
 // An update or delete that matched no row (removed, locked or hidden meanwhile) is a failure.
@@ -148,19 +129,17 @@ export async function setSlot(p: {
         .eq('locked', false) // a meal locked meanwhile stays put
         .select('id'),
     )
-  // TODO(v2): delete + insert in one transaction (needs an RPC + migration); a failed insert
-  // after the delete leaves the slot empty. Everything that can fail first runs before the delete.
-  const mealPlanId = await planId(p.householdId, p.weekStart)
-  if (p.current) await removeEntry(p.current.id)
+  // Removing the old entry and adding the new one happen together, or not at all.
   check(
-    await supabase.from('meal_plan_entries').insert({
-      meal_plan_id: mealPlanId,
-      household_id: p.householdId,
-      date: p.date,
-      slot: p.slot,
-      recipe_id: p.recipe.id,
-      servings: p.leftoverOf?.servings ?? p.recipe.base_servings,
-      leftover_of: p.leftoverOf?.id ?? null,
+    await supabase.rpc('replace_plan_entry', {
+      p_household_id: p.householdId,
+      p_week_start: p.weekStart,
+      p_date: p.date,
+      p_slot: p.slot,
+      p_current_id: p.current?.id ?? null,
+      p_recipe_id: p.recipe.id,
+      p_servings: p.leftoverOf?.servings ?? p.recipe.base_servings,
+      p_leftover_of: p.leftoverOf?.id ?? null,
     }),
   )
 }
