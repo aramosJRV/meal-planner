@@ -77,7 +77,7 @@ function Routes(props: { household: Household; userId: string }) {
   if (!id) return <RecipeLibrary householdId={householdId} />
   if (id === 'new')
     return (
-      <Screen title="Add recipe" back="#/recipes">
+      <Screen title="Add recipe" back="#/recipes" wide>
         <RecipeForm householdId={householdId} initial={emptyDraft} />
       </Screen>
     )

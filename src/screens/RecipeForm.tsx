@@ -64,8 +64,9 @@ export default function RecipeForm({
   const num = (f: FormData, k: string) => (f.get(k) === '' ? null : Number(f.get(k)))
 
   return (
+    // Stacked on phone; details beside ingredients and method on wide screens.
     <form
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start lg:gap-x-16"
       onSubmit={async (e) => {
         e.preventDefault()
         const types = new FormData(e.currentTarget).getAll('meal_types')
@@ -124,150 +125,158 @@ export default function RecipeForm({
         )
       }}
     >
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="title">Title</Label>
-        <Input id="title" name="title" defaultValue={initial.title} maxLength={200} required />
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="base_servings">Serves</Label>
+          <Label htmlFor="title">Title</Label>
+          <Input id="title" name="title" defaultValue={initial.title} maxLength={200} required />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="base_servings">Serves</Label>
+            <Input
+              id="base_servings"
+              name="base_servings"
+              type="number"
+              min={1}
+              max={100}
+              required
+              defaultValue={initial.base_servings}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="prep_minutes">Prep (min)</Label>
+            <Input
+              id="prep_minutes"
+              name="prep_minutes"
+              type="number"
+              min={0}
+              max={10000}
+              defaultValue={initial.prep_minutes ?? ''}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="cook_minutes">Cook (min)</Label>
+            <Input
+              id="cook_minutes"
+              name="cook_minutes"
+              type="number"
+              min={0}
+              max={10000}
+              defaultValue={initial.cook_minutes ?? ''}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="cuisine">Cuisine</Label>
           <Input
-            id="base_servings"
-            name="base_servings"
-            type="number"
-            min={1}
-            max={100}
-            required
-            defaultValue={initial.base_servings}
+            id="cuisine"
+            name="cuisine"
+            placeholder="e.g. Thai"
+            maxLength={100}
+            defaultValue={initial.cuisine ?? ''}
           />
         </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="prep_minutes">Prep (min)</Label>
-          <Input
-            id="prep_minutes"
-            name="prep_minutes"
-            type="number"
-            min={0}
-            max={10000}
-            defaultValue={initial.prep_minutes ?? ''}
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="cook_minutes">Cook (min)</Label>
-          <Input
-            id="cook_minutes"
-            name="cook_minutes"
-            type="number"
-            min={0}
-            max={10000}
-            defaultValue={initial.cook_minutes ?? ''}
-          />
-        </div>
-      </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="cuisine">Cuisine</Label>
-        <Input
-          id="cuisine"
-          name="cuisine"
-          placeholder="e.g. Thai"
-          maxLength={100}
-          defaultValue={initial.cuisine ?? ''}
-        />
-      </div>
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 text-sm font-medium">Suits</legend>
-        <div className="flex flex-wrap gap-4">
-          {MEAL_TYPES.map((t) => (
-            <label key={t} className="flex items-center gap-2 text-sm capitalize">
-              <input
-                type="checkbox"
-                name="meal_types"
-                value={t}
-                defaultChecked={initial.meal_types.includes(t)}
-              />
-              {t}
-            </label>
-          ))}
-        </div>
-        {noMealType && (
-          <p role="alert" className="text-destructive text-sm">
-            Tick at least one meal this recipe suits.
-          </p>
-        )}
-      </fieldset>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="ingredients">Ingredients</Label>
-        <p className="text-muted-foreground text-sm">
-          One per line, e.g. "2 cloves garlic, crushed".
-        </p>
-        <textarea
-          id="ingredients"
-          name="ingredients"
-          className={textarea}
-          rows={8}
-          defaultValue={initial.ingredients}
-          onChange={(e) => setIngredientsText(e.target.value)}
-        />
-        {hints && matches.isError && (
-          <p role="alert" className="text-destructive text-sm">
-            Couldn't check these against your ingredients. Saving will try again.
-          </p>
-        )}
-        {hints && matched.length > 0 && (
-          <ul aria-label="Ingredient matches" className="divide-y border-y text-sm">
-            {matched.map((l, i) => (
-              <li key={i} className="flex justify-between gap-3 py-1.5">
-                <span className="text-muted-foreground">{l.raw_text}</span>
-                {!matches.isSuccess ? null : l.isNew ? (
-                  <span className="shrink-0 text-xs font-medium tracking-widest uppercase">
-                    New ingredient
-                  </span>
-                ) : (
-                  <span className="shrink-0">{l.name}</span>
-                )}
-              </li>
+        <fieldset className="flex flex-col gap-2">
+          <legend className="mb-2 text-sm font-medium">Suits</legend>
+          <div className="flex flex-wrap gap-4">
+            {MEAL_TYPES.map((t) => (
+              <label key={t} className="flex items-center gap-2 text-sm capitalize">
+                <input
+                  type="checkbox"
+                  name="meal_types"
+                  value={t}
+                  defaultChecked={initial.meal_types.includes(t)}
+                />
+                {t}
+              </label>
             ))}
-          </ul>
-        )}
+          </div>
+          {noMealType && (
+            <p role="alert" className="text-destructive text-sm">
+              Tick at least one meal this recipe suits.
+            </p>
+          )}
+        </fieldset>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="steps">Method</Label>
-        <p className="text-muted-foreground text-sm">One step per line.</p>
-        <textarea
-          id="steps"
-          name="steps"
-          className={textarea}
-          rows={8}
-          defaultValue={initial.steps}
-        />
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="ingredients">Ingredients</Label>
+          <p className="text-muted-foreground text-sm">
+            One per line, e.g. "2 cloves garlic, crushed".
+          </p>
+          <textarea
+            id="ingredients"
+            name="ingredients"
+            className={textarea}
+            rows={8}
+            defaultValue={initial.ingredients}
+            onChange={(e) => setIngredientsText(e.target.value)}
+          />
+          {hints && matches.isError && (
+            <p role="alert" className="text-destructive text-sm">
+              Couldn't check these against your ingredients. Saving will try again.
+            </p>
+          )}
+          {hints && matched.length > 0 && (
+            <ul aria-label="Ingredient matches" className="divide-y border-y text-sm">
+              {matched.map((l, i) => (
+                <li key={i} className="flex justify-between gap-3 py-1.5">
+                  <span className="text-muted-foreground">{l.raw_text}</span>
+                  {!matches.isSuccess ? null : l.isNew ? (
+                    <span className="shrink-0 text-xs font-medium tracking-widest uppercase">
+                      New ingredient
+                    </span>
+                  ) : (
+                    <span className="shrink-0">{l.name}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="steps">Method</Label>
+          <p className="text-muted-foreground text-sm">One step per line.</p>
+          <textarea
+            id="steps"
+            name="steps"
+            className={textarea}
+            rows={8}
+            defaultValue={initial.steps}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="notes">Notes</Label>
+          <textarea
+            id="notes"
+            name="notes"
+            className={textarea}
+            rows={3}
+            defaultValue={initial.notes ?? ''}
+          />
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="notes">Notes</Label>
-        <textarea
-          id="notes"
-          name="notes"
-          className={textarea}
-          rows={3}
-          defaultValue={initial.notes ?? ''}
-        />
-      </div>
-
-      <Button type="submit" disabled={checking || save.isPending}>
+      <Button
+        type="submit"
+        className="lg:col-start-2 lg:justify-self-start lg:px-10"
+        disabled={checking || save.isPending}
+      >
         {saveLabel}
       </Button>
       {matchError && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-sm lg:col-start-2">
           Couldn't check the ingredients. Check your connection and try again.
         </p>
       )}
       {save.isError && (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-sm lg:col-start-2">
           {(save.error as { code?: string }).code === '23514'
             ? "Something in this recipe isn't valid. Check it has a title and each ingredient line is under 500 characters."
             : "Couldn't save the recipe. Check your connection and try again."}

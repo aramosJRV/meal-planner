@@ -17,7 +17,7 @@ export default function RecipeEdit({ id, householdId }: { id: string; householdI
       </Screen>
     )
   return (
-    <Screen title="Edit recipe" back={`#/recipes/${id}`}>
+    <Screen title="Edit recipe" back={`#/recipes/${id}`} wide>
       <RecipeForm
         householdId={householdId}
         recipeId={id}

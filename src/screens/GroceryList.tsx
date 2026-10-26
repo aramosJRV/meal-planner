@@ -121,10 +121,14 @@ export default function GroceryList({
   const week = local(weekStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
-    <Screen title="Shopping list" nav="list">
+    <Screen title="Shopping list" nav="list" wide>
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-sm">For the week of {week}</p>
-        <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+        <Button
+          className="lg:self-start lg:px-10"
+          onClick={() => refresh.mutate()}
+          disabled={refresh.isPending}
+        >
           {refresh.isPending ? 'Refreshing…' : 'Refresh list'}
         </Button>
         {refresh.isError && (
@@ -167,55 +171,62 @@ export default function GroceryList({
         </p>
       )}
 
-      {byAisle.map((g) => (
-        <section key={g.aisle} aria-labelledby={`aisle-${g.aisle}`} className="flex flex-col">
-          <h2
-            id={`aisle-${g.aisle}`}
-            className={`${label} border-foreground border-b-[1.5px] pb-1`}
+      {/* One column on phone; aisles side by side on wide screens. */}
+      <div className="flex flex-col gap-6 empty:hidden lg:block lg:columns-2 lg:gap-12 xl:columns-3">
+        {byAisle.map((g) => (
+          <section
+            key={g.aisle}
+            aria-labelledby={`aisle-${g.aisle}`}
+            className="flex flex-col lg:mb-8 lg:break-inside-avoid"
           >
-            {g.title}
-          </h2>
-          <ul role="list" className="flex flex-col divide-y">
-            {g.items.map((item) => (
-              <li key={item.id}>
-                <label
-                  className={`flex min-h-11 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="size-5"
-                    checked={item.checked}
-                    onChange={(e) =>
-                      tick.mutate({
-                        key,
-                        id: item.id,
-                        name: item.display_name,
-                        checked: e.target.checked,
-                      })
-                    }
-                  />
-                  <span className="flex flex-1 flex-col">
-                    <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
-                      {item.display_name}
-                    </span>
-                    {(item.quantities.length > 0 || item.stale) && (
-                      <span className="text-muted-foreground text-sm">
-                        {[amounts(item), item.stale && 'No longer in the plan']
-                          .filter(Boolean)
-                          .join(' · ')}
+            <h2
+              id={`aisle-${g.aisle}`}
+              className={`${label} border-foreground border-b-[1.5px] pb-1`}
+            >
+              {g.title}
+            </h2>
+            <ul role="list" className="flex flex-col divide-y">
+              {g.items.map((item) => (
+                <li key={item.id}>
+                  <label
+                    className={`flex min-h-11 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-5"
+                      checked={item.checked}
+                      onChange={(e) =>
+                        tick.mutate({
+                          key,
+                          id: item.id,
+                          name: item.display_name,
+                          checked: e.target.checked,
+                        })
+                      }
+                    />
+                    <span className="flex flex-1 flex-col">
+                      <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
+                        {item.display_name}
                       </span>
-                    )}
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+                      {(item.quantities.length > 0 || item.stale) && (
+                        <span className="text-muted-foreground text-sm">
+                          {[amounts(item), item.stale && 'No longer in the plan']
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
 
       {listId && (
         <form
-          className="flex gap-2"
+          className="flex gap-2 lg:max-w-md"
           onSubmit={(e) => {
             e.preventDefault()
             const display_name = name.trim()
