@@ -132,4 +132,8 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Keep focused or scrolled-to elements clear of the top tab bar on wide screens. */
+  html {
+    @apply lg:scroll-pt-20;
+  }
 }

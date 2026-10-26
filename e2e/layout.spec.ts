@@ -16,7 +16,12 @@ test('wide screens get the week side by side and tabs on top; phones keep the da
   const [mon, tue] = [await box(page, `day-${WEEK}`), await box(page, 'day-2026-10-27')]
   expect(tue.x).toBeGreaterThan(mon.x)
   expect(tue.y).toBe(mon.y)
-  expect((await tabs(page).boundingBox())!.y).toBeLessThan(10)
+  const top = (await tabs(page).boundingBox())!
+  expect(top.y).toBeLessThan(10)
+  // The page title starts below the bar, not under it.
+  expect((await page.getByRole('heading', { level: 1 }).boundingBox())!.y).toBeGreaterThanOrEqual(
+    top.y + top.height,
+  )
 
   await page.setViewportSize({ width: 390, height: 844 })
   const [mon2, tue2] = [await box(page, `day-${WEEK}`), await box(page, 'day-2026-10-27')]

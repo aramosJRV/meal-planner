@@ -172,57 +172,59 @@ export default function GroceryList({
       )}
 
       {/* One column on phone; aisles side by side on wide screens. */}
-      <div className="flex flex-col gap-6 empty:hidden lg:block lg:columns-2 lg:gap-12 xl:columns-3">
-        {byAisle.map((g) => (
-          <section
-            key={g.aisle}
-            aria-labelledby={`aisle-${g.aisle}`}
-            className="flex flex-col lg:mb-8 lg:break-inside-avoid"
-          >
-            <h2
-              id={`aisle-${g.aisle}`}
-              className={`${label} border-foreground border-b-[1.5px] pb-1`}
+      {!!byAisle.length && (
+        <div className="flex flex-col gap-6 lg:block lg:columns-2 lg:gap-12 xl:columns-3">
+          {byAisle.map((g) => (
+            <section
+              key={g.aisle}
+              aria-labelledby={`aisle-${g.aisle}`}
+              className="flex flex-col lg:mb-8 lg:break-inside-avoid"
             >
-              {g.title}
-            </h2>
-            <ul role="list" className="flex flex-col divide-y">
-              {g.items.map((item) => (
-                <li key={item.id}>
-                  <label
-                    className={`flex min-h-11 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="size-5"
-                      checked={item.checked}
-                      onChange={(e) =>
-                        tick.mutate({
-                          key,
-                          id: item.id,
-                          name: item.display_name,
-                          checked: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className="flex flex-1 flex-col">
-                      <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
-                        {item.display_name}
-                      </span>
-                      {(item.quantities.length > 0 || item.stale) && (
-                        <span className="text-muted-foreground text-sm">
-                          {[amounts(item), item.stale && 'No longer in the plan']
-                            .filter(Boolean)
-                            .join(' · ')}
+              <h2
+                id={`aisle-${g.aisle}`}
+                className={`${label} border-foreground border-b-[1.5px] pb-1`}
+              >
+                {g.title}
+              </h2>
+              <ul role="list" className="flex flex-col divide-y">
+                {g.items.map((item) => (
+                  <li key={item.id}>
+                    <label
+                      className={`flex min-h-11 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="size-5"
+                        checked={item.checked}
+                        onChange={(e) =>
+                          tick.mutate({
+                            key,
+                            id: item.id,
+                            name: item.display_name,
+                            checked: e.target.checked,
+                          })
+                        }
+                      />
+                      <span className="flex flex-1 flex-col">
+                        <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
+                          {item.display_name}
                         </span>
-                      )}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+                        {(item.quantities.length > 0 || item.stale) && (
+                          <span className="text-muted-foreground text-sm">
+                            {[amounts(item), item.stale && 'No longer in the plan']
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
 
       {listId && (
         <form

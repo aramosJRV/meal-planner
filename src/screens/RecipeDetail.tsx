@@ -115,7 +115,7 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
 
       {/* Stacked on phone; ingredients beside the method on wide screens. */}
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start lg:gap-16">
-        <section className="flex flex-col gap-3 lg:sticky lg:top-6">
+        <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">
               Ingredients
