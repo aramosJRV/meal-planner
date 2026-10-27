@@ -92,6 +92,23 @@ test('build the shopping list from the plan, tick, add, work offline and follow 
   await expect(item(page, 'Dishwasher tablets')).toBeVisible()
   await expect.poll(() => checked(page, 'Dishwasher tablets')).toBe(false)
 
+  // Hand-added items can be renamed and removed, and go in the aisle of a matching ingredient.
+  // Plan items can't be renamed or removed.
+  await expect(item(page, 'Pasta').getByRole('button')).toHaveCount(0)
+  await page.getByLabel('Add an item').fill('Bananas')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect(page.getByRole('region', { name: 'Fruit & veg' })).toContainText('Bananas')
+  await page.getByRole('button', { name: 'Rename Bananas' }).click()
+  await page.getByLabel('New name for Bananas').fill('Milk')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('region', { name: 'Dairy & eggs' })).toContainText('Milk')
+  await expect(page.getByText('Bananas')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Remove Milk' }).click()
+  await expect(item(page, 'Milk')).toHaveCount(0)
+  await expect
+    .poll(async () => (await api(page, 'rest/v1/grocery_items?select=id&source=eq.manual')).body)
+    .toHaveLength(1) // just the dishwasher tablets
+
   // A tick the server can't apply (the item changed meanwhile) is undone and named.
   await page.route('http://127.0.0.1:54321/rest/v1/grocery_items?id=eq.*', (route) =>
     route.request().method() === 'PATCH' ? route.fulfill({ json: [] }) : route.continue(),
@@ -158,4 +175,56 @@ test('sync-grocery-list refuses another household and bad input', async ({ page 
     week_start: WEEK,
   })
   expect(other.status).toBe(403)
+})
+
+// A list with Batteries on it, saved on the phone; then the login runs out while there's no
+// signal, and the app is reopened. With `refuse`, the server has also signed the login out.
+async function expiredOffline(page: Page, refuse: boolean) {
+  await newHousehold(page, `grocery-login-${refuse}`)
+  await page.goto(`/#/list/${WEEK}`)
+  await page.getByLabel('Add an item').fill('Batteries')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect.poll(() => checked(page, 'Batteries')).toBe(false)
+  await page.waitForTimeout(1500) // the saved copy is written at most once a second
+  if (refuse) expect((await api(page, 'auth/v1/logout', {})).status).toBe(204)
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.endsWith('-auth-token'))!
+    localStorage.setItem(
+      key,
+      JSON.stringify({ ...JSON.parse(localStorage.getItem(key)!), expires_at: 1 }),
+    )
+  })
+  await page.route('http://127.0.0.1:54321/**', (route) => route.abort())
+  await page.reload()
+  // The saved list shows straight away instead of the sign-in screen.
+  await expect(item(page, 'Batteries')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Email me a sign-in link' })).toHaveCount(0)
+}
+
+test('offline with an expired login the saved list shows; back online the login renews and changes are sent', async ({
+  page,
+}) => {
+  test.setTimeout(150_000) // renewal is retried at most a minute apart
+  await expiredOffline(page, false)
+  await tick(page, 'Batteries')
+  await page.unroute('http://127.0.0.1:54321/**')
+  await expect.poll(() => checked(page, 'Batteries'), { timeout: 90_000 }).toBe(true)
+  await expect(item(page, 'Batteries').getByRole('checkbox')).toBeChecked()
+})
+
+test('offline with an expired login the saved list shows; back online, a refused login asks to sign in again', async ({
+  page,
+}) => {
+  test.setTimeout(150_000) // renewal is retried at most a minute apart
+  await expiredOffline(page, true)
+  await page.unroute('http://127.0.0.1:54321/**')
+  await expect(page.getByRole('button', { name: 'Email me a sign-in link' })).toBeVisible({
+    timeout: 90_000,
+  })
+  // The saved list went with the login.
+  await page.route('http://127.0.0.1:54321/**', (route) => route.abort())
+  await page.goto(`/#/list/${WEEK}`)
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Email me a sign-in link' })).toBeVisible()
+  await expect(page.getByText('Batteries')).toHaveCount(0)
 })
