@@ -8,7 +8,7 @@ A household meal-planning app. Users build a personal recipe library (manual, UR
 ## 2. Locked decisions
 | # | Area | Decision |
 |---|------|----------|
-| 1 | Audience | Own household now, store app later → multi-household (multi-tenant) from day one |
+| 1 | Audience | Own household now, public web app next (M7), store apps later (M8) → multi-household (multi-tenant) from day one |
 | 2 | Recipe source | User's own library: manual entry + URL import. No third-party recipe API, no AI-generated recipes |
 | 3 | Instagram | No API exists for others' posts. Share sheet → user pastes caption and/or attaches screenshots → AI extracts structured recipe → user reviews → save |
 | 4 | Platforms | Capacitor iOS + Android + responsive web dashboard, one codebase. **Web launches first** (decided 2026-10-27); store apps postponed to M8 |
@@ -101,7 +101,7 @@ Weights live in `households.planner_settings`. Pure scoring function in a shared
 - Everything else (import, planning) requires connectivity; show a clear offline state.
 
 ## 9. Share sheet (Instagram and others)
-- iOS Share Extension + Android `ACTION_SEND` intent filter, receiving URL / text / images.
+- Phone apps only (dormant until M8; web uses paste/upload on the Import screen). iOS Share Extension + Android `ACTION_SEND` intent filter, receiving URL / text / images.
 - Payload handed to the app → opens **Import** screen prefilled (URL, any shared text, images). User can paste caption and add screenshots, then "Extract".
 - **Spike (M3, 2026-10-20)**: chose `@capgo/capacitor-share-target` (free, Capacitor 8, iOS + Android, text/links/images) plus a small iOS Share Extension writing to the App Group `group.com.jrvsolutions.mealplanner`. Rejected: Capawesome share-target (paid), send-intent (Capacitor 7 only), fully custom native code (more to maintain).
 
@@ -130,7 +130,7 @@ Each milestone ends with tests passing and a working build. Merge to `main` on g
 - **M4 Planner** — slot config, `generate-plan` + scoring unit tests, This Week screen, lock/reshuffle/swap, leftovers
 - **M5 Grocery** — `sync-grocery-list` merge + tests, list UI, Realtime, offline persistence
 - **M6 Web dashboard** — wide layouts, keyboard-friendly planning
-- **M7 Web launch** — hosted Supabase project, web hosting, icons + installable web app (manifest), privacy policy, account deletion. Each production step needs human approval
+- **M7 Web launch** — hosted Supabase project (migrations pushed to it, production Edge Function secrets incl. the Anthropic key, auth site URL + redirect allow-list, real email sending for magic links), web hosting, icons + installable web app (manifest), privacy policy, account deletion. Web sign-in is email magic link; Apple/Google sign-in optional on web. On web there's no share sheet: Instagram import is paste caption / upload screenshots on the Import screen. Each production step and each hosted migration push needs human approval
 - **M8 Store readiness (postponed)** — App Store/Play metadata, store icons and screenshots, signing, native share sheet testing on devices. Capacitor iOS/Android stays in the codebase but isn't released until then
 
 ## 12. Out of scope (v1) → v2 candidates
