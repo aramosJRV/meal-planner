@@ -127,10 +127,14 @@ export default function GroceryList({
   const week = local(weekStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
-    <Screen title="Shopping list" nav="list">
+    <Screen title="Shopping list" nav="list" wide>
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-sm">For the week of {week}</p>
-        <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+        <Button
+          className="lg:self-start lg:px-10"
+          onClick={() => refresh.mutate()}
+          disabled={refresh.isPending}
+        >
           {refresh.isPending ? 'Refreshing…' : 'Refresh list'}
         </Button>
         {refresh.isError && (
@@ -173,112 +177,123 @@ export default function GroceryList({
         </p>
       )}
 
-      {byAisle.map((g) => (
-        <section key={g.aisle} aria-labelledby={`aisle-${g.aisle}`} className="flex flex-col">
-          <h2
-            id={`aisle-${g.aisle}`}
-            className={`${label} border-foreground border-b-[1.5px] pb-1`}
-          >
-            {g.title}
-          </h2>
-          <ul role="list" className="flex flex-col divide-y">
-            {g.items.map((item) => (
-              <li key={item.id} className="flex items-center gap-2">
-                {editing?.id === item.id ? (
-                  <form
-                    className="flex min-h-11 flex-1 items-center gap-2 py-2"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      const to = editing.to.trim()
-                      if (to && to !== item.display_name)
-                        rename.mutate({
-                          key,
-                          id: item.id,
-                          name: item.display_name,
-                          to,
-                          household_id: household.id,
-                        })
-                      setEditing(null)
-                    }}
-                  >
-                    <Input
-                      aria-label={`New name for ${item.display_name}`}
-                      maxLength={100}
-                      autoFocus
-                      value={editing.to}
-                      onChange={(e) => setEditing({ id: item.id, to: e.target.value })}
-                      onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
-                    />
-                    <Button type="submit">Save</Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="px-2"
-                      onClick={() => setEditing(null)}
-                    >
-                      Cancel
-                    </Button>
-                  </form>
-                ) : (
-                  <label
-                    className={`flex min-h-11 flex-1 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="size-5"
-                      checked={item.checked}
-                      onChange={(e) =>
-                        tick.mutate({
-                          key,
-                          id: item.id,
-                          name: item.display_name,
-                          checked: e.target.checked,
-                        })
-                      }
-                    />
-                    <span className="flex flex-1 flex-col">
-                      <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
-                        {item.display_name}
-                      </span>
-                      {(item.quantities.length > 0 || item.stale) && (
-                        <span className="text-muted-foreground text-sm">
-                          {[amounts(item), item.stale && 'No longer in the plan']
-                            .filter(Boolean)
-                            .join(' · ')}
+      {/* One column on phone; aisles side by side on wide screens. */}
+      {!!byAisle.length && (
+        <div className="flex flex-col gap-6 lg:block lg:columns-2 lg:gap-12 xl:columns-3">
+          {byAisle.map((g) => (
+            <section
+              key={g.aisle}
+              aria-labelledby={`aisle-${g.aisle}`}
+              className="flex flex-col lg:mb-8 lg:break-inside-avoid"
+            >
+              <h2
+                id={`aisle-${g.aisle}`}
+                className={`${label} border-foreground border-b-[1.5px] pb-1`}
+              >
+                {g.title}
+              </h2>
+              <ul role="list" className="flex flex-col divide-y">
+                {g.items.map((item) => (
+                  <li key={item.id} className="flex items-center gap-2">
+                    {editing?.id === item.id ? (
+                      <form
+                        className="flex min-h-11 flex-1 items-center gap-2 py-2"
+                        onSubmit={(e) => {
+                          e.preventDefault()
+                          const to = editing.to.trim()
+                          if (to && to !== item.display_name)
+                            rename.mutate({
+                              key,
+                              id: item.id,
+                              name: item.display_name,
+                              to,
+                              household_id: household.id,
+                            })
+                          setEditing(null)
+                        }}
+                      >
+                        <Input
+                          aria-label={`New name for ${item.display_name}`}
+                          maxLength={100}
+                          autoFocus
+                          value={editing.to}
+                          onChange={(e) => setEditing({ id: item.id, to: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                        />
+                        <Button type="submit">Save</Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="px-2"
+                          onClick={() => setEditing(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </form>
+                    ) : (
+                      <label
+                        className={`flex min-h-11 flex-1 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="size-5"
+                          checked={item.checked}
+                          onChange={(e) =>
+                            tick.mutate({
+                              key,
+                              id: item.id,
+                              name: item.display_name,
+                              checked: e.target.checked,
+                            })
+                          }
+                        />
+                        <span className="flex flex-1 flex-col">
+                          <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
+                            {item.display_name}
+                          </span>
+                          {(item.quantities.length > 0 || item.stale) && (
+                            <span className="text-muted-foreground text-sm">
+                              {[amounts(item), item.stale && 'No longer in the plan']
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </span>
-                  </label>
-                )}
-                {item.source === 'manual' && editing?.id !== item.id && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      className="px-2"
-                      aria-label={`Rename ${item.display_name}`}
-                      onClick={() => setEditing({ id: item.id, to: item.display_name })}
-                    >
-                      Rename
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="px-2"
-                      aria-label={`Remove ${item.display_name}`}
-                      onClick={() => remove.mutate({ key, id: item.id, name: item.display_name })}
-                    >
-                      Remove
-                    </Button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+                      </label>
+                    )}
+                    {item.source === 'manual' && editing?.id !== item.id && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          className="px-2"
+                          aria-label={`Rename ${item.display_name}`}
+                          onClick={() => setEditing({ id: item.id, to: item.display_name })}
+                        >
+                          Rename
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="px-2"
+                          aria-label={`Remove ${item.display_name}`}
+                          onClick={() =>
+                            remove.mutate({ key, id: item.id, name: item.display_name })
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
 
       {listId && (
         <form
-          className="flex gap-2"
+          className="flex gap-2 lg:max-w-md"
           onSubmit={(e) => {
             e.preventDefault()
             const display_name = name.trim()

@@ -15,6 +15,9 @@ import Screen from './Screen'
 
 const label = 'text-highlight text-xs font-bold tracking-[0.16em] uppercase'
 const row = 'flex w-full flex-col py-3 text-left hover:underline disabled:opacity-50'
+// One column on phone; two or three on wide screens.
+const grid =
+  'border-foreground flex flex-col divide-y border-t-[1.5px] lg:grid lg:grid-cols-2 lg:gap-x-12 lg:divide-y-0 xl:grid-cols-3'
 
 // Pick a recipe (or leftovers of an earlier meal) for one slot of the week.
 export default function ChooseMeal(p: {
@@ -63,9 +66,9 @@ export default function ChooseMeal(p: {
   const suits = all.filter((r) => r.meal_types.includes(p.slot))
   const others = all.filter((r) => !r.meal_types.includes(p.slot))
   const list = (rs: typeof all) => (
-    <ul role="list" className="border-foreground flex flex-col divide-y border-t-[1.5px]">
+    <ul role="list" className={grid}>
       {rs.map((r) => (
-        <li key={r.id}>
+        <li key={r.id} className="lg:border-b">
           <button className={row} disabled={blocked} onClick={() => pick(r)}>
             <span className="font-serif text-2xl leading-tight">
               {r.title}
@@ -81,7 +84,7 @@ export default function ChooseMeal(p: {
   )
 
   return (
-    <Screen title={`${dayLabel(p.date)} ${p.slot}`} back={back}>
+    <Screen title={`${dayLabel(p.date)} ${p.slot}`} back={back} wide>
       {recipes.isError && (
         <p role="alert" className="text-destructive text-sm">
           Couldn't load your recipes. Please reload the app.
@@ -108,9 +111,9 @@ export default function ChooseMeal(p: {
       {!!earlier.length && (
         <section className="flex flex-col gap-2">
           <h2 className={label}>Leftovers</h2>
-          <ul role="list" className="border-foreground flex flex-col divide-y border-t-[1.5px]">
+          <ul role="list" className={grid}>
             {earlier.map((e) => (
-              <li key={e.id}>
+              <li key={e.id} className="lg:border-b">
                 <button
                   className={row}
                   disabled={blocked}
@@ -131,6 +134,7 @@ export default function ChooseMeal(p: {
         type="search"
         aria-label="Search recipes"
         placeholder="Search recipes"
+        className="lg:max-w-sm"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />

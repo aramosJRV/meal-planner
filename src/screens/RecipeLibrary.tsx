@@ -25,7 +25,7 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
   )
 
   return (
-    <Screen title="Recipes" nav="recipes">
+    <Screen title="Recipes" nav="recipes" wide>
       <div className="flex gap-2">
         <a href="#/recipes/new" className={buttonVariants()}>
           Add recipe
@@ -35,11 +35,12 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
         </a>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
         <Input
           type="search"
           aria-label="Search recipes"
           placeholder="Search recipes"
+          className="lg:max-w-sm"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -93,11 +94,12 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
         <p className="text-muted-foreground">No recipes match those filters.</p>
       )}
 
-      <ul className="border-foreground flex flex-col divide-y border-t-[1.5px]">
+      {/* One column on phone; two or three on wide screens. */}
+      <ul className="border-foreground flex flex-col divide-y border-t-[1.5px] lg:grid lg:grid-cols-2 lg:gap-x-12 lg:divide-y-0 xl:grid-cols-3">
         {shown.map((r) => {
           const minutes = (r.prep_minutes ?? 0) + (r.cook_minutes ?? 0)
           return (
-            <li key={r.id}>
+            <li key={r.id} className="lg:border-b">
               <a href={`#/recipes/${r.id}`} className="flex flex-col py-3 hover:underline">
                 <span className="font-serif text-2xl leading-tight">
                   {r.title}
