@@ -11,7 +11,7 @@ A household meal-planning app. Users build a personal recipe library (manual, UR
 | 1 | Audience | Own household now, store app later → multi-household (multi-tenant) from day one |
 | 2 | Recipe source | User's own library: manual entry + URL import. No third-party recipe API, no AI-generated recipes |
 | 3 | Instagram | No API exists for others' posts. Share sheet → user pastes caption and/or attaches screenshots → AI extracts structured recipe → user reviews → save |
-| 4 | Platforms | Capacitor iOS + Android + responsive web dashboard, one codebase |
+| 4 | Platforms | Capacitor iOS + Android + responsive web dashboard, one codebase. **Web launches first** (decided 2026-10-27); store apps postponed to M8 |
 | 5 | Ingredients | Canonical ingredient table; per-line quantity + unit; conversion only within a unit family; pantry-staple flag |
 | 6 | Plan shape | Configurable slots per household (breakfast/lunch/dinner/snack), dinner-only by default; one recipe may fill multiple slots (leftovers) |
 | 7 | Suggestions | Deterministic scoring in a Supabase Edge Function. LLM "tweak" deferred to v2 |
@@ -130,7 +130,8 @@ Each milestone ends with tests passing and a working build. Merge to `main` on g
 - **M4 Planner** — slot config, `generate-plan` + scoring unit tests, This Week screen, lock/reshuffle/swap, leftovers
 - **M5 Grocery** — `sync-grocery-list` merge + tests, list UI, Realtime, offline persistence
 - **M6 Web dashboard** — wide layouts, keyboard-friendly planning
-- **M7 Store readiness** — icons, privacy policy, App Store/Play metadata, account deletion (required by both stores)
+- **M7 Web launch** — hosted Supabase project, web hosting, icons + installable web app (manifest), privacy policy, account deletion. Each production step needs human approval
+- **M8 Store readiness (postponed)** — App Store/Play metadata, store icons and screenshots, signing, native share sheet testing on devices. Capacitor iOS/Android stays in the codebase but isn't released until then
 
 ## 12. Out of scope (v1) → v2 candidates
 LLM plan tweak · paywall/RevenueCat · dietary/allergen filters · nutrition · cross-family unit conversion (density) · pantry inventory · supermarket price/ordering integration · recipe sharing between households
