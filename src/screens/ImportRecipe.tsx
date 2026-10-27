@@ -162,7 +162,7 @@ function ImportForm({ householdId, shared }: { householdId: string; shared: Shar
 
   if (getRecipe.data)
     return (
-      <Screen title="Check the recipe" back="#/recipes">
+      <Screen title="Check the recipe" back="#/recipes" wide>
         <p className="text-muted-foreground text-sm">
           Here's what we found. Fix anything that's wrong, then save.
         </p>

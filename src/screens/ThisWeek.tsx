@@ -18,7 +18,7 @@ import { syncSoon } from './groceryData'
 import Screen from './Screen'
 
 const label = 'text-xs font-semibold tracking-[0.14em] uppercase'
-const action = `${label} text-muted-foreground hover:text-foreground flex min-h-11 items-center disabled:opacity-40`
+const action = `${label} text-muted-foreground hover:text-foreground flex min-h-11 items-center disabled:opacity-40 lg:min-h-8`
 const shortDate = (date: string) =>
   local(date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 const shiftWeek = (weekStart: string, weeks: number) =>
@@ -52,47 +52,52 @@ export default function ThisWeek({
 
   return (
     <Screen title={title} nav="week" wide>
-      <div className="flex items-center justify-between gap-2">
-        <a
-          href={`#/week/${shiftWeek(weekStart, -1)}`}
-          className={action}
-          aria-label="Previous week"
-        >
-          ← Prev
-        </a>
-        <p className="text-muted-foreground text-sm">
-          {shortDate(dates[0])} – {shortDate(dates[6])}
-        </p>
-        <a href={`#/week/${shiftWeek(weekStart, 1)}`} className={action} aria-label="Next week">
-          Next →
-        </a>
-      </div>
-      <a href={`#/list/${weekStart}`} className={action}>
-        Shopping list for this week →
-      </a>
+      {/* Stacked on phone; one row above the week on wide screens. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-12">
+        <div className="flex flex-col gap-6 lg:gap-0">
+          <div className="flex items-center justify-between gap-2 lg:justify-start lg:gap-6">
+            <a
+              href={`#/week/${shiftWeek(weekStart, -1)}`}
+              className={action}
+              aria-label="Previous week"
+            >
+              ← Prev
+            </a>
+            <p className="text-muted-foreground text-sm">
+              {shortDate(dates[0])} – {shortDate(dates[6])}
+            </p>
+            <a href={`#/week/${shiftWeek(weekStart, 1)}`} className={action} aria-label="Next week">
+              Next →
+            </a>
+          </div>
+          <a href={`#/list/${weekStart}`} className={action}>
+            Shopping list for this week →
+          </a>
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <Button onClick={() => suggest.mutate()} disabled={suggest.isPending || week.isPending}>
-          {suggest.isPending ? 'Suggesting…' : 'Suggest week'}
-        </Button>
-        <p className="text-muted-foreground text-sm">
-          Fills empty slots and reshuffles anything not locked.
-        </p>
-        {suggest.isError && (
-          <p role="alert" className="text-destructive text-sm">
-            {suggest.error.message}
+        <div className="flex flex-col gap-2 lg:w-96">
+          <Button onClick={() => suggest.mutate()} disabled={suggest.isPending || week.isPending}>
+            {suggest.isPending ? 'Suggesting…' : 'Suggest week'}
+          </Button>
+          <p className="text-muted-foreground text-sm">
+            Fills empty slots and reshuffles anything not locked.
           </p>
-        )}
-        {suggest.data && suggest.data.unfilled > 0 && (
-          <p role="status" className="text-sm">
-            {suggest.data.unfilled === 1
-              ? "One slot couldn't"
-              : `${suggest.data.unfilled} slots couldn't`}{' '}
-            be filled. Add more recipes that suit those meals (weeknights need{' '}
-            {readSettings(household.planner_settings).weeknight_cap} minutes or less, unless you
-            change it in Settings).
-          </p>
-        )}
+          {suggest.isError && (
+            <p role="alert" className="text-destructive text-sm">
+              {suggest.error.message}
+            </p>
+          )}
+          {suggest.data && suggest.data.unfilled > 0 && (
+            <p role="status" className="text-sm">
+              {suggest.data.unfilled === 1
+                ? "One slot couldn't"
+                : `${suggest.data.unfilled} slots couldn't`}{' '}
+              be filled. Add more recipes that suit those meals (weeknights need{' '}
+              {readSettings(household.planner_settings).weeknight_cap} minutes or less, unless you
+              change it in Settings).
+            </p>
+          )}
+        </div>
       </div>
 
       {week.isError && !week.data && (
@@ -168,7 +173,7 @@ function SlotRow(p: {
         <>
           <a
             href={`#/recipes/${entry.recipe_id}`}
-            className="font-serif text-2xl leading-tight hover:underline"
+            className="font-serif text-2xl leading-tight hover:underline lg:text-xl"
           >
             {entry.recipes.title}
           </a>

@@ -75,7 +75,7 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
   ].filter(Boolean)
 
   return (
-    <Screen title={recipe.title} back="#/recipes">
+    <Screen title={recipe.title} back="#/recipes" wide>
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
@@ -105,7 +105,7 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
       )}
 
       {recipe.description && (
-        <p className="text-muted-foreground font-serif text-xl leading-snug italic">
+        <p className="text-muted-foreground font-serif text-xl leading-snug italic lg:max-w-3xl">
           {recipe.description}
         </p>
       )}
@@ -113,89 +113,100 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
         {[recipe.cuisine, ...minutes].filter(Boolean).join(' · ')}
       </p>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">
-            Ingredients
-          </h2>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Fewer servings"
-              disabled={servings <= 1}
-              onClick={() => setServings((s) => s - 1)}
-            >
-              −
-            </Button>
-            <Input
-              aria-label="Servings"
-              type="number"
-              min={1}
-              max={100}
-              className="w-16 text-center"
-              value={servings}
-              onChange={(e) => setServings(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="More servings"
-              disabled={servings >= 100}
-              onClick={() => setServings((s) => s + 1)}
-            >
-              +
-            </Button>
-          </div>
-        </div>
-        <p className="text-muted-foreground text-sm">Serves {servings}</p>
-        {/* role="list": Safari drops list semantics when list-style is none. */}
-        <ul
-          role="list"
-          className="border-foreground flex flex-col border-t-[1.5px]"
-          data-testid="ingredients"
-        >
-          {recipe.recipe_ingredients.map((l) => (
-            <li key={l.id} className="border-b py-2">
-              {lineText(l, servings, recipe.base_servings)}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {!!recipe.recipe_steps.length && (
+      {/* Stacked on phone; ingredients beside the method on wide screens. */}
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start lg:gap-16">
         <section className="flex flex-col gap-3">
-          <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">Method</h2>
-          <ol role="list" className="flex flex-col gap-3">
-            {recipe.recipe_steps.map((s, i) => (
-              <li key={s.id} className="flex gap-3">
-                <span className="text-highlight w-6 shrink-0 font-serif text-2xl leading-6">
-                  {i + 1}
-                </span>
-                {s.text}
+          <div className="flex items-center justify-between">
+            <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">
+              Ingredients
+            </h2>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Fewer servings"
+                disabled={servings <= 1}
+                onClick={() => setServings((s) => s - 1)}
+              >
+                −
+              </Button>
+              <Input
+                aria-label="Servings"
+                type="number"
+                min={1}
+                max={100}
+                className="w-16 text-center"
+                value={servings}
+                onChange={(e) =>
+                  setServings(Math.min(100, Math.max(1, Number(e.target.value) || 1)))
+                }
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="More servings"
+                disabled={servings >= 100}
+                onClick={() => setServings((s) => s + 1)}
+              >
+                +
+              </Button>
+            </div>
+          </div>
+          <p className="text-muted-foreground text-sm">Serves {servings}</p>
+          {/* role="list": Safari drops list semantics when list-style is none. */}
+          <ul
+            role="list"
+            className="border-foreground flex flex-col border-t-[1.5px]"
+            data-testid="ingredients"
+          >
+            {recipe.recipe_ingredients.map((l) => (
+              <li key={l.id} className="border-b py-2">
+                {lineText(l, servings, recipe.base_servings)}
               </li>
             ))}
-          </ol>
+          </ul>
         </section>
-      )}
 
-      {recipe.notes && (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">Notes</h2>
-          <p className="whitespace-pre-line">{recipe.notes}</p>
-        </section>
-      )}
+        <div className="flex flex-col gap-6 empty:hidden">
+          {!!recipe.recipe_steps.length && (
+            <section className="flex flex-col gap-3">
+              <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">
+                Method
+              </h2>
+              <ol role="list" className="flex flex-col gap-3">
+                {recipe.recipe_steps.map((s, i) => (
+                  <li key={s.id} className="flex gap-3">
+                    <span className="text-highlight w-6 shrink-0 font-serif text-2xl leading-6">
+                      {i + 1}
+                    </span>
+                    {s.text}
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
 
-      {recipe.source_url && (
-        <a
-          href={recipe.source_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm underline"
-        >
-          View original recipe
-        </a>
-      )}
+          {recipe.notes && (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-highlight text-xs font-bold tracking-[0.16em] uppercase">
+                Notes
+              </h2>
+              <p className="whitespace-pre-line">{recipe.notes}</p>
+            </section>
+          )}
+
+          {recipe.source_url && (
+            <a
+              href={recipe.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm underline"
+            >
+              View original recipe
+            </a>
+          )}
+        </div>
+      </div>
     </Screen>
   )
 }

@@ -8,7 +8,8 @@ const TABS = [
 ] as const
 
 // With `back`, the screen is a content page: top-aligned with a back link.
-// With `nav`, it's a top-level screen with the text-only tab bar.
+// With `nav`, it's a top-level screen with the text-only tab bar (bottom on phones, top on wide
+// screens). With `wide`, the page uses the full width of a computer screen.
 export default function Screen({
   title,
   back,
@@ -25,7 +26,7 @@ export default function Screen({
   return (
     <>
       <main
-        className={`mx-auto flex min-h-svh max-w-md flex-col gap-6 px-6 pt-[max(1.5rem,env(safe-area-inset-top))] ${nav ? 'pb-28' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]'} ${back || nav ? 'justify-start' : 'justify-center'} ${wide ? 'lg:max-w-7xl' : ''}`}
+        className={`mx-auto flex min-h-svh max-w-md flex-col gap-6 px-6 pt-[max(1.5rem,env(safe-area-inset-top))] ${nav ? 'pb-28 lg:pt-[calc(5rem+env(safe-area-inset-top))] lg:pb-12' : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]'} ${back || nav ? 'justify-start' : 'justify-center'} ${wide ? 'lg:max-w-7xl 2xl:max-w-[96rem]' : ''}`}
       >
         {back && (
           <a
@@ -41,8 +42,11 @@ export default function Screen({
         {children}
       </main>
       {nav && (
-        <nav className="bg-background fixed inset-x-0 bottom-0 border-t pb-[env(safe-area-inset-bottom)]">
-          <ul role="list" className="mx-auto flex max-w-md justify-around">
+        <nav className="bg-background fixed inset-x-0 bottom-0 border-t pb-[env(safe-area-inset-bottom)] lg:top-0 lg:bottom-auto lg:border-t-0 lg:border-b lg:pt-[env(safe-area-inset-top)] lg:pb-0">
+          <ul
+            role="list"
+            className="mx-auto flex max-w-md justify-around lg:max-w-7xl lg:justify-start lg:gap-8 lg:px-4 2xl:max-w-[96rem]"
+          >
             {TABS.map((t) => (
               <li key={t.key}>
                 <a
