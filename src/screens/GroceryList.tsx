@@ -11,6 +11,8 @@ import {
   type Item,
   type List,
   listKey,
+  type Remove,
+  type Rename,
   syncList,
   type Tick,
   useGroceryList,
@@ -53,6 +55,8 @@ export default function GroceryList({
   const list = useGroceryList(household.id, weekStart)
   const queryClient = useQueryClient()
   const [name, setName] = useState('')
+  // The manual item being renamed, and its new name.
+  const [editing, setEditing] = useState<{ id: string; to: string } | null>(null)
   const listId = list.data?.id
 
   const refresh = useMutation({
@@ -62,6 +66,8 @@ export default function GroceryList({
   // mutationFn and callbacks come from registerGroceryMutations (main.tsx).
   const tick = useMutation<void, Error, Tick>({ mutationKey: ['grocery', 'tick'] })
   const add = useMutation<void, Error, Add>({ mutationKey: ['grocery', 'add'] })
+  const rename = useMutation<void, Error, Rename>({ mutationKey: ['grocery', 'rename'] })
+  const remove = useMutation<void, Error, Remove>({ mutationKey: ['grocery', 'remove'] })
   const online = useSyncExternalStore(onlineManager.subscribe.bind(onlineManager), () =>
     onlineManager.isOnline(),
   )
@@ -140,7 +146,7 @@ export default function GroceryList({
         <p role="status" className="bg-muted px-3 py-2 text-sm">
           {online
             ? `Sending ${changes(waiting.length)}…`
-            : `Offline. ${waiting.length ? changes(waiting.length) : 'Ticks and new items'} will be sent when you're back online.`}
+            : `Offline. ${waiting.length ? changes(waiting.length) : 'Your changes'} will be sent when you're back online.`}
         </p>
       )}
       {failed.length > 0 && (
@@ -177,36 +183,93 @@ export default function GroceryList({
           </h2>
           <ul role="list" className="flex flex-col divide-y">
             {g.items.map((item) => (
-              <li key={item.id}>
-                <label
-                  className={`flex min-h-11 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="size-5"
-                    checked={item.checked}
-                    onChange={(e) =>
-                      tick.mutate({
-                        key,
-                        id: item.id,
-                        name: item.display_name,
-                        checked: e.target.checked,
-                      })
-                    }
-                  />
-                  <span className="flex flex-1 flex-col">
-                    <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
-                      {item.display_name}
-                    </span>
-                    {(item.quantities.length > 0 || item.stale) && (
-                      <span className="text-muted-foreground text-sm">
-                        {[amounts(item), item.stale && 'No longer in the plan']
-                          .filter(Boolean)
-                          .join(' · ')}
+              <li key={item.id} className="flex items-center gap-2">
+                {editing?.id === item.id ? (
+                  <form
+                    className="flex min-h-11 flex-1 items-center gap-2 py-2"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const to = editing.to.trim()
+                      if (to && to !== item.display_name)
+                        rename.mutate({
+                          key,
+                          id: item.id,
+                          name: item.display_name,
+                          to,
+                          household_id: household.id,
+                        })
+                      setEditing(null)
+                    }}
+                  >
+                    <Input
+                      aria-label={`New name for ${item.display_name}`}
+                      maxLength={100}
+                      autoFocus
+                      value={editing.to}
+                      onChange={(e) => setEditing({ id: item.id, to: e.target.value })}
+                      onKeyDown={(e) => e.key === 'Escape' && setEditing(null)}
+                    />
+                    <Button type="submit">Save</Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="px-2"
+                      onClick={() => setEditing(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </form>
+                ) : (
+                  <label
+                    className={`flex min-h-11 flex-1 items-center gap-3 py-2 ${item.checked || item.stale ? 'text-muted-foreground' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-5"
+                      checked={item.checked}
+                      onChange={(e) =>
+                        tick.mutate({
+                          key,
+                          id: item.id,
+                          name: item.display_name,
+                          checked: e.target.checked,
+                        })
+                      }
+                    />
+                    <span className="flex flex-1 flex-col">
+                      <span className={`text-lg ${item.checked ? 'line-through' : ''}`}>
+                        {item.display_name}
                       </span>
-                    )}
-                  </span>
-                </label>
+                      {(item.quantities.length > 0 || item.stale) && (
+                        <span className="text-muted-foreground text-sm">
+                          {[amounts(item), item.stale && 'No longer in the plan']
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                )}
+                {item.source === 'manual' && editing?.id !== item.id && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      className="px-2"
+                      aria-label={`Rename ${item.display_name}`}
+                      onClick={() => setEditing({ id: item.id, to: item.display_name })}
+                    >
+                      Rename
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="px-2"
+                      aria-label={`Remove ${item.display_name}`}
+                      onClick={() => remove.mutate({ key, id: item.id, name: item.display_name })}
+                    >
+                      Remove
+                    </Button>
+                  </>
+                )}
               </li>
             ))}
           </ul>

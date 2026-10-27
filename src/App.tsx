@@ -18,11 +18,31 @@ import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import ThisWeek from '@/screens/ThisWeek'
 
+// The login saved on this phone. Supabase keeps it until the server refuses it (a real
+// sign-out, which also clears the saved copy in main.tsx), including when an expired one
+// can't be renewed for lack of signal. Start with it so the saved list shows straight away,
+// rather than after Supabase gives up renewing (up to ~30 s with no signal); once back
+// online the next renewal either succeeds (TOKEN_REFRESHED) or signs out (SIGNED_OUT).
+function savedSession(): Session | null {
+  try {
+    const key = (supabase.auth as unknown as { storageKey: string }).storageKey
+    const s = JSON.parse(localStorage.getItem(key) ?? 'null') as Session | null
+    return s?.refresh_token && s.user?.id ? s : null
+  } catch {
+    return null
+  }
+}
+
 function useSession() {
-  // undefined = still checking; fires INITIAL_SESSION straight away, including after a magic-link redirect.
-  const [session, setSession] = useState<Session | null>()
+  // undefined = still checking; fires INITIAL_SESSION once the saved login is renewed or given
+  // up on, including after a magic-link redirect.
+  const [session, setSession] = useState<Session | null | undefined>(
+    () => savedSession() ?? undefined,
+  )
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    const { data } = supabase.auth.onAuthStateChange((event, s) =>
+      setSession(event === 'INITIAL_SESSION' && !s ? savedSession() : s),
+    )
     return () => data.subscription.unsubscribe()
   }, [])
   return session
