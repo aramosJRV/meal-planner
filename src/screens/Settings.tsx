@@ -37,6 +37,17 @@ export default function Settings({ household, userId }: Props) {
     onSuccess: () => queryClient.clear(),
   })
 
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteAccount = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.functions.invoke('delete-account')
+      if (error) throw error
+      // The account is gone on the server, so only forget the login on this device.
+      await supabase.auth.signOut({ scope: 'local' })
+    },
+    onError: (e) => console.error('delete account', e),
+  })
+
   const invite = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase
@@ -184,6 +195,40 @@ export default function Settings({ household, userId }: Props) {
           Couldn't sign out. Check your connection and try again.
         </p>
       )}
+
+      <section className="flex flex-col gap-3">
+        <h2 className={heading}>Your account</h2>
+        {confirmDelete ? (
+          <>
+            <p>
+              This deletes your account straight away and can't be undone. If nobody else is in your
+              household, its recipes, plans and lists are deleted too.
+            </p>
+            <Button
+              variant="destructive"
+              onClick={() => deleteAccount.mutate()}
+              disabled={deleteAccount.isPending}
+            >
+              Yes, delete my account
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+              Keep my account
+            </Button>
+          </>
+        ) : (
+          <Button variant="outline" onClick={() => setConfirmDelete(true)}>
+            Delete my account
+          </Button>
+        )}
+        {deleteAccount.isError && (
+          <p role="alert" className="text-destructive text-sm">
+            Couldn't delete your account. Check your connection and try again.
+          </p>
+        )}
+        <a href="#/privacy" className="text-muted-foreground text-sm underline">
+          Privacy
+        </a>
+      </section>
     </Screen>
   )
 }
