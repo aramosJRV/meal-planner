@@ -28,6 +28,8 @@ export default {
         mine.map((r) => r.household_id),
       )
     if (membersError) return serverError('find members', membersError)
+    // TODO(v2): read and act in one transaction (needs a migration): two members deleting at the
+    // same moment can both leave the household, orphaning it.
     const { deleteHouseholds, newOwners } = planDeletion(userId, members)
 
     for (const o of newOwners) {
@@ -63,7 +65,8 @@ export default {
     }
 
     const { error } = await db.auth.admin.deleteUser(userId)
-    if (error) return serverError('delete user', error)
+    // Already gone: an earlier attempt worked but its reply was lost.
+    if (error && error.status !== 404) return serverError('delete user', error)
     return Response.json({ deleted: true })
   }),
 }

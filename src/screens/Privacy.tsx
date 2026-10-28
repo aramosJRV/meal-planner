@@ -19,8 +19,8 @@ export default function Privacy() {
           <li>Your household's name and the people in it.</li>
           <li>The recipes, meal plans and shopping lists your household adds.</li>
           <li>
-            Captions, web addresses and screenshots you choose to import, while we turn them into a
-            recipe.
+            Captions, web addresses and screenshots you choose to import. We keep these with your
+            household's imports.
           </li>
           <li>A count of how many imports your household runs each day, to keep costs fair.</li>
         </ul>
