@@ -60,6 +60,9 @@ export default function SignIn() {
           </p>
         )}
       </form>
+      <a href="#/privacy" className="text-muted-foreground text-sm underline">
+        Privacy
+      </a>
     </Screen>
   )
 }

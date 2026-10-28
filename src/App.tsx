@@ -11,6 +11,7 @@ import type { Household } from '@/screens/planData'
 import RecipeDetail from '@/screens/RecipeDetail'
 import RecipeEdit from '@/screens/RecipeEdit'
 import RecipeForm from '@/screens/RecipeForm'
+import Privacy from '@/screens/Privacy'
 import { emptyDraft } from '@/screens/recipeData'
 import RecipeLibrary from '@/screens/RecipeLibrary'
 import Screen from '@/screens/Screen'
@@ -108,6 +109,7 @@ function Routes(props: { household: Household; userId: string }) {
 
 export default function App() {
   const session = useSession()
+  const [section] = useRoute()
   const userId = session?.user.id
   const households = useQuery({
     queryKey: ['households', userId],
@@ -122,6 +124,8 @@ export default function App() {
     },
   })
 
+  // Readable signed in or out (linked from the sign-in screen).
+  if (section === 'privacy') return <Privacy />
   if (session === undefined) return null
   if (!session) return <SignIn />
   if (households.isPending) return null
