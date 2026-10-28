@@ -40,17 +40,22 @@ export default {
     }
 
     const media = db.storage.from('recipe-media')
-    for (const hid of deleteHouseholds) {
-      // shortcut: only the imports/ folder exists today; list any new folders here too.
-      for (;;) {
-        const { data: files, error } = await media.list(`${hid}/imports`, { limit: 1000 })
-        if (error) return serverError('list screenshots', error)
-        if (!files.length) break
-        const { error: removeError } = await media.remove(
-          files.map((f) => `${hid}/imports/${f.name}`),
-        )
-        if (removeError) return serverError('remove screenshots', removeError)
+    // Everything under each household's folder, at any depth (uploads may use any sub-folder).
+    // Listed in full before removing anything, so paging doesn't skip files.
+    const folders = [...deleteHouseholds]
+    const files: string[] = []
+    while (folders.length) {
+      const folder = folders.pop()!
+      for (let offset = 0; ; offset += 1000) {
+        const { data: entries, error } = await media.list(folder, { limit: 1000, offset })
+        if (error) return serverError('list files', error)
+        for (const e of entries) (e.id === null ? folders : files).push(`${folder}/${e.name}`)
+        if (entries.length < 1000) break
       }
+    }
+    for (let i = 0; i < files.length; i += 1000) {
+      const { error } = await media.remove(files.slice(i, i + 1000))
+      if (error) return serverError('remove files', error)
     }
     if (deleteHouseholds.length) {
       const { error } = await db.from('households').delete().in('id', deleteHouseholds)
