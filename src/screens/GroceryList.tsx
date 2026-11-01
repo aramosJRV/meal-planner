@@ -1,5 +1,5 @@
 import { onlineManager, useMutation, useMutationState, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { weekStartFor } from '@/lib/planner'
@@ -63,6 +63,10 @@ export default function GroceryList({
   const [editing, setEditing] = useState<{ id: string; to: string } | null>(null)
   // Shop at Coles: the unticked items when it started, and which one is showing.
   const [shop, setShop] = useState<{ items: Item[]; at: number } | null>(null)
+  const shopButton = useRef<HTMLButtonElement>(null)
+  const refreshButton = useRef<HTMLButtonElement>(null)
+  const shopPanel = useRef<HTMLElement>(null)
+  const wasShopping = useRef(false)
   const listId = list.data?.id
 
   const refresh = useMutation({
@@ -130,13 +134,23 @@ export default function GroceryList({
       ),
   })).filter((g) => g.items.length)
 
-  const toBuy = byAisle.flatMap((g) => g.items.filter((i) => !i.checked))
-  const shopping = shop && shop.items[shop.at]
+  const toBuy = byAisle.flatMap((g) => g.items.filter((i) => !i.checked && !i.stale))
+  // The live copy, so a rename elsewhere shows; the snapshot if it's gone from the list.
+  const shopping =
+    shop && (items.find((i) => i.id === shop.items[shop.at]?.id) ?? shop.items[shop.at])
   const nextItem = (tickIt: boolean) => {
     if (!shop || !shopping) return
     if (tickIt) tick.mutate({ key, id: shopping.id, name: shopping.display_name, checked: true })
     setShop(shop.at + 1 < shop.items.length ? { ...shop, at: shop.at + 1 } : null)
   }
+
+  // Keyboard focus follows the step-through in and out (the button that opened it may be gone).
+  const shopOpen = !!shop
+  useEffect(() => {
+    if (shopOpen) shopPanel.current?.focus()
+    else if (wasShopping.current) (shopButton.current ?? refreshButton.current)?.focus()
+    wasShopping.current = shopOpen
+  }, [shopOpen])
 
   const week = local(weekStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
@@ -145,6 +159,7 @@ export default function GroceryList({
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-sm">For the week of {week}</p>
         <Button
+          ref={refreshButton}
           className="lg:self-start lg:px-10"
           onClick={() => refresh.mutate()}
           disabled={refresh.isPending}
@@ -153,6 +168,7 @@ export default function GroceryList({
         </Button>
         {!shop && toBuy.length > 0 && (
           <Button
+            ref={shopButton}
             variant="outline"
             className="lg:self-start lg:px-10"
             onClick={() => setShop({ items: toBuy, at: 0 })}
@@ -171,18 +187,22 @@ export default function GroceryList({
 
       {shop && shopping && (
         <section
+          ref={shopPanel}
+          tabIndex={-1}
           aria-label="Shop at Coles"
           className="border-foreground flex flex-col gap-3 border-[1.5px] p-4 lg:max-w-md"
         >
-          <p className={label}>
-            Item {shop.at + 1} of {shop.items.length}
-          </p>
-          <p className="flex flex-col">
-            <span className="font-serif text-2xl">{shopping.display_name}</span>
-            {shopping.quantities.length > 0 && (
-              <span className="text-muted-foreground text-sm">{amounts(shopping)}</span>
-            )}
-          </p>
+          <div aria-live="polite" className="flex flex-col gap-3">
+            <p className={label}>
+              Item {shop.at + 1} of {shop.items.length}
+            </p>
+            <p className="flex flex-col">
+              <span className="font-serif text-2xl">{shopping.display_name}</span>
+              {shopping.quantities.length > 0 && (
+                <span className="text-muted-foreground text-sm">{amounts(shopping)}</span>
+              )}
+            </p>
+          </div>
           <a
             href={colesSearch(shopping.display_name)}
             target="_blank"
@@ -321,7 +341,7 @@ export default function GroceryList({
                         </span>
                       </label>
                     )}
-                    {!item.checked && editing?.id !== item.id && (
+                    {!item.checked && !item.stale && editing?.id !== item.id && (
                       <a
                         href={colesSearch(item.display_name)}
                         target="_blank"

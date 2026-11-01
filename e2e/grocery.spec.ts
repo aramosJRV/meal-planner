@@ -253,6 +253,7 @@ test('Shop at Coles: a Coles search link per item, and a step-through that ticks
   // Aisle order: dairy first, then Other (alphabetical).
   const shop = page.getByRole('region', { name: 'Shop at Coles' })
   await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  await expect(shop).toBeFocused() // keyboard focus moves into the step-through
   await expect(shop).toContainText('Item 1 of 3')
   await expect(shop.getByRole('link', { name: /Search Coles for Milk/ })).toHaveAttribute(
     'href',
@@ -278,5 +279,6 @@ test('Shop at Coles: a Coles search link per item, and a step-through that ticks
   await expect(shop).toContainText('Batteries')
   await shop.getByRole('button', { name: 'Stop' }).click()
   await expect(shop).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Shop at Coles' })).toBeFocused()
   expect(await checked(page, 'Batteries')).toBe(false)
 })
