@@ -137,7 +137,7 @@ test('a link without recipe data falls back to the AI reader', async ({ page }) 
   await page.getByLabel('Link').fill('https://blog.example/pasta')
   await page.getByRole('button', { name: 'Get recipe' }).click()
   await expect(page.getByRole('alert')).toHaveText(
-    "You've used today's recipe imports for your household. Try again tomorrow, or add it by hand.",
+    "You've used today's recipe searches and imports for your household. Try again tomorrow, or add it by hand.",
   )
   expect(sent).toMatchObject({
     text: "Nan's pasta: 200 g spaghetti…",
