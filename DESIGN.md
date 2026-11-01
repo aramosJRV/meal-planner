@@ -9,7 +9,7 @@ A household meal-planning app. Users build a personal recipe library (manual, UR
 | # | Area | Decision |
 |---|------|----------|
 | 1 | Audience | Own household now, public web app next (M7), store apps later (M8) → multi-household (multi-tenant) from day one |
-| 2 | Recipe source | User's own library: manual entry + URL import. No third-party recipe API, no AI-generated recipes |
+| 2 | Recipe source | User's own library: manual entry + URL import. No third-party recipe API, no AI-generated recipes. In-app web search (added 2026-11-01, user's request) only finds pages to bring in through URL import |
 | 3 | Instagram | No API exists for others' posts. Share sheet → user pastes caption and/or attaches screenshots → AI extracts structured recipe → user reviews → save |
 | 4 | Platforms | Capacitor iOS + Android + responsive web dashboard, one codebase. **Web launches first** (decided 2026-10-27); store apps postponed to M8 |
 | 5 | Ingredients | Canonical ingredient table; per-line quantity + unit; conversion only within a unit family; pantry-staple flag |
@@ -69,6 +69,7 @@ All household-owned tables carry `household_id uuid not null` and RLS: row visib
 |---|---|
 | `import-url` | Fetch URL server-side; parse schema.org `Recipe` JSON-LD; if absent, fall back to `extract-recipe` on page text. **SSRF guard**: http/https only, block private/loopback IP ranges, size + timeout limits |
 | `extract-recipe` | Input: caption text and/or screenshot paths. Calls Claude with a **forced tool/JSON schema** output (title, servings, times, ingredients[{raw, qty, unit, ingredient_name, note}], steps[]). Input text treated as untrusted data; never follows instructions in it. Writes `recipe_imports.extracted`. Enforces rate limit (e.g. 20/household/day, configurable) and logs `ai_usage`. Mapping `ingredient_name` → existing `ingredients` (exact canonical match, then fuzzy via `pg_trgm`; else new) is done by the Import review screen through `match_ingredients()`, so it follows the user's edits (changed 2026-10-20, approved) |
+| `search-recipes` | Input: a search phrase (2–100 chars). Calls Claude with the web search tool (one search, Australian results preferred) and returns only the results' titles and links; Claude's own text is discarded, so page content can't steer the app. Picking a result runs the normal URL import and review screen. Counts towards the same daily AI limit as `extract-recipe` |
 | `generate-plan` | Fills empty, unlocked slots for a week (see §6). Accepts `scope: week|entry` for reshuffle |
 | `sync-grocery-list` | Rebuilds plan-sourced items by merge (see §7) |
 | `accept-invite` | Validates code/expiry, inserts `household_members`, marks invite used |
