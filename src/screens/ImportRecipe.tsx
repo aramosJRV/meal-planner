@@ -27,7 +27,7 @@ const importErrors: Record<string, string> = {
   too_many_redirects: 'That link redirects too many times.',
   fetch_failed: "We couldn't load that page. Check the link and try again.",
   rate_limited:
-    "You've used today's recipe imports for your household. Try again tomorrow, or add it by hand.",
+    "You've used today's recipe searches and imports for your household. Try again tomorrow, or add it by hand.",
   ai_failed: "The recipe reader isn't working right now. Try again in a minute.",
   image_missing: "One of the screenshots didn't upload. Try again.",
   forbidden: "You're no longer in this household. Close and reopen the app.",
@@ -130,6 +130,78 @@ async function extract(householdId: string, body: object): Promise<Result> {
   }
 }
 
+type Found = { title: string; url: string; site: string }
+
+// Web search for recipe pages; picking one imports it like a pasted link.
+function RecipeSearch({
+  householdId,
+  busy,
+  onPick,
+}: {
+  householdId: string
+  busy: boolean
+  onPick: (url: string) => void
+}) {
+  const search = useMutation({
+    mutationFn: async (query: string) =>
+      ((await call('search-recipes', { household_id: householdId, query })) as { results: Found[] })
+        .results,
+  })
+  return (
+    <section className="flex flex-col gap-3" aria-label="Search for a recipe">
+      <form
+        role="search"
+        className="flex flex-col gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const query = (new FormData(e.currentTarget).get('q') as string).trim()
+          if (query.length >= 2) search.mutate(query)
+        }}
+      >
+        <Label htmlFor="q">Search for a recipe</Label>
+        <div className="flex gap-2">
+          <Input id="q" name="q" type="search" placeholder="e.g. chicken laksa" maxLength={100} />
+          <Button type="submit" variant="outline" disabled={search.isPending}>
+            {search.isPending ? 'Searching…' : 'Search'}
+          </Button>
+        </div>
+      </form>
+      {search.isError && (
+        <p role="alert" className="text-destructive text-sm">
+          {search.error.message}
+        </p>
+      )}
+      {search.data?.length === 0 && (
+        <p role="status" className="text-sm">
+          No recipes found. Try different words.
+        </p>
+      )}
+      {!!search.data?.length && (
+        <ul className="divide-y border-y" aria-label="Search results">
+          {search.data.map((r) => (
+            <li key={r.url} className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{r.title}</p>
+                <p className="text-muted-foreground truncate text-xs">{r.site}</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                aria-label={`Import ${r.title}`}
+                onClick={() => onPick(r.url)}
+              >
+                Import
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-muted-foreground text-xs">Or bring in a recipe you already have:</p>
+    </section>
+  )
+}
+
 export default function ImportRecipe({ householdId }: { householdId: string }) {
   const shared = useShared()
   // A new share starts the screen afresh, prefilled.
@@ -177,6 +249,11 @@ function ImportForm({ householdId, shared }: { householdId: string; shared: Shar
 
   return (
     <Screen title="Import a recipe" back="#/recipes">
+      <RecipeSearch
+        householdId={householdId}
+        busy={getRecipe.isPending}
+        onPick={(url) => getRecipe.mutate({ url, text: '', files: [] })}
+      />
       <p className="text-muted-foreground text-sm">
         Paste a link, the caption from a post, or add screenshots of the recipe. You can use any
         mix.

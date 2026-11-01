@@ -317,3 +317,61 @@ test('the real extract-recipe checks membership, records failures and enforces t
   expect((await api(page, 'rest/v1/ai_usage?select=id')).body).toHaveLength(2)
   expect((await api(page, 'rest/v1/recipe_imports?select=id')).body).toHaveLength(2)
 })
+
+// search-recipes needs a real Anthropic key, so its answer is stubbed; the pick then goes
+// through the normal link import (also stubbed, as above).
+test('search for a recipe, pick a result, review it', async ({ page }) => {
+  const sourceUrl = 'https://recipes.example/lemon-chicken'
+  const fixture = readFileSync(new URL('./fixtures/recipe-page.html', import.meta.url), 'utf8')
+  const stub = (fn: string, body: unknown) =>
+    page.route(`**/functions/v1/${fn}`, (route) =>
+      route.fulfill({
+        status: route.request().method() === 'OPTIONS' ? 204 : 200,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-headers': '*',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }),
+    )
+  await stub('search-recipes', {
+    results: [{ title: 'Lemon herb chicken', url: sourceUrl, site: 'recipes.example' }],
+  })
+  await stub('import-url', { recipe: parseRecipePage(fixture, sourceUrl) })
+  await newHousehold(page, 'searcher')
+
+  await page.getByRole('link', { name: 'Import a recipe' }).click()
+  await page.getByLabel('Search for a recipe').fill('lemon chicken')
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await expect(page.getByText('recipes.example')).toBeVisible()
+  await page.getByRole('button', { name: 'Import Lemon herb chicken' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Check the recipe' })).toBeVisible()
+  await expect(page.getByLabel('Title')).toHaveValue('Lemon herb chicken')
+})
+
+// The real search-recipes with the fake AI settings (see ci.yml): nothing reaches Anthropic.
+test('the real search-recipes checks sign-in, input and membership', async ({ page, request }) => {
+  test.skip(!process.env.E2E_FAKE_AI, 'needs the fake AI settings in supabase/functions/.env')
+  const unsigned = await request.post('http://127.0.0.1:54321/functions/v1/search-recipes', {
+    headers: { apikey: anonKey },
+    data: { query: 'laksa' },
+  })
+  expect(unsigned.status()).toBe(401)
+
+  await newHousehold(page, 'websearch')
+  const [{ id }] = (await api(page, 'rest/v1/households?select=id')).body as { id: string }[]
+  const search = (body: object) => api(page, 'functions/v1/search-recipes', body)
+  expect(await search({ household_id: id, query: 'x' })).toEqual({
+    status: 400,
+    body: { error: 'bad_request' },
+  })
+  expect(
+    await search({ household_id: '11111111-1111-1111-1111-111111111111', query: 'laksa' }),
+  ).toEqual({ status: 403, body: { error: 'forbidden' } })
+  expect(await search({ household_id: id, query: 'laksa' })).toEqual({
+    status: 502,
+    body: { error: 'ai_failed' },
+  })
+})
