@@ -1,6 +1,6 @@
 import { onlineManager, useMutation, useMutationState, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { weekStartFor } from '@/lib/planner'
 import { supabase } from '@/lib/supabase'
@@ -35,6 +35,10 @@ const AISLES: [string, string][] = [
   ['other', 'Other'],
 ]
 
+// Coles has no API for outside apps (DESIGN.md §7): we only link to its own product search.
+const colesSearch = (name: string) =>
+  `https://www.coles.com.au/search/products?q=${encodeURIComponent(name)}`
+
 const changes = (n: number) => (n === 1 ? '1 change' : `${n} changes`)
 
 const amounts = (item: Item) =>
@@ -57,6 +61,8 @@ export default function GroceryList({
   const [name, setName] = useState('')
   // The manual item being renamed, and its new name.
   const [editing, setEditing] = useState<{ id: string; to: string } | null>(null)
+  // Shop at Coles: the unticked items when it started, and which one is showing.
+  const [shop, setShop] = useState<{ items: Item[]; at: number } | null>(null)
   const listId = list.data?.id
 
   const refresh = useMutation({
@@ -124,6 +130,14 @@ export default function GroceryList({
       ),
   })).filter((g) => g.items.length)
 
+  const toBuy = byAisle.flatMap((g) => g.items.filter((i) => !i.checked))
+  const shopping = shop && shop.items[shop.at]
+  const nextItem = (tickIt: boolean) => {
+    if (!shop || !shopping) return
+    if (tickIt) tick.mutate({ key, id: shopping.id, name: shopping.display_name, checked: true })
+    setShop(shop.at + 1 < shop.items.length ? { ...shop, at: shop.at + 1 } : null)
+  }
+
   const week = local(weekStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
@@ -137,6 +151,15 @@ export default function GroceryList({
         >
           {refresh.isPending ? 'Refreshing…' : 'Refresh list'}
         </Button>
+        {!shop && toBuy.length > 0 && (
+          <Button
+            variant="outline"
+            className="lg:self-start lg:px-10"
+            onClick={() => setShop({ items: toBuy, at: 0 })}
+          >
+            Shop at Coles
+          </Button>
+        )}
         {refresh.isError && (
           <p role="alert" className="text-destructive text-sm">
             {refresh.error instanceof GroceryError
@@ -145,6 +168,43 @@ export default function GroceryList({
           </p>
         )}
       </div>
+
+      {shop && shopping && (
+        <section
+          aria-label="Shop at Coles"
+          className="border-foreground flex flex-col gap-3 border-[1.5px] p-4 lg:max-w-md"
+        >
+          <p className={label}>
+            Item {shop.at + 1} of {shop.items.length}
+          </p>
+          <p className="flex flex-col">
+            <span className="font-serif text-2xl">{shopping.display_name}</span>
+            {shopping.quantities.length > 0 && (
+              <span className="text-muted-foreground text-sm">{amounts(shopping)}</span>
+            )}
+          </p>
+          <a
+            href={colesSearch(shopping.display_name)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonVariants()}
+          >
+            Search Coles for {shopping.display_name}
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => nextItem(true)}>
+              Got it, tick and next
+            </Button>
+            <Button variant="outline" onClick={() => nextItem(false)}>
+              Skip
+            </Button>
+            <Button variant="ghost" className="px-2" onClick={() => setShop(null)}>
+              Stop
+            </Button>
+          </div>
+        </section>
+      )}
 
       {(!online || waiting.length > 0) && (
         <p role="status" className="bg-muted px-3 py-2 text-sm">
@@ -260,6 +320,17 @@ export default function GroceryList({
                           )}
                         </span>
                       </label>
+                    )}
+                    {!item.checked && editing?.id !== item.id && (
+                      <a
+                        href={colesSearch(item.display_name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Search Coles for ${item.display_name} (opens in a new tab)`}
+                        className={buttonVariants({ variant: 'ghost', className: 'px-2' })}
+                      >
+                        Coles
+                      </a>
                     )}
                     {item.source === 'manual' && editing?.id !== item.id && (
                       <>
