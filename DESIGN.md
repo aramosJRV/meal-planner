@@ -94,6 +94,9 @@ Weights live in `households.planner_settings`. Pure scoring function in a shared
 3. `source='manual'` items never touched.
 4. Triggered automatically on plan change (debounced) and manually via "Refresh list".
 
+### Shop at Coles (added 2026-11-01, outside the §11 milestones)
+Coles has no public API for outside apps to fill a shopper's trolley (its recipe-to-cart is a private deal with taste.com.au), so this is links only. Each unticked item on the Shopping list gets a "Coles" link that opens `https://www.coles.com.au/search/products?q=<item name>` in a new tab; the shopper picks a product and adds it to their trolley on Coles. A "Shop at Coles" button steps through the unticked items in aisle order: each step has the Coles link for that item, "Got it, tick and next" ticks it in our app and moves on, "Skip" moves on without ticking, "Stop" ends it. Items marked "No longer in the plan" get no link. Ticks use the existing offline-first tick mutation. No Coles login, scraping, automation or Coles data in our app; only the item name leaves in the link. No schema change. Supermarket ordering integration stays out of scope (§12).
+
 ## 8. Offline & sync
 - TanStack Query `persistQueryClient` to IndexedDB for: current grocery list, current week plan, recipes in that plan.
 - Mutations (tick/untick, add manual item) use `networkMode: 'offlineFirst'`, paused offline, resumed on reconnect.

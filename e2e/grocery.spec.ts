@@ -228,3 +228,57 @@ test('offline with an expired login the saved list shows; back online, a refused
   await expect(page.getByRole('button', { name: 'Email me a sign-in link' })).toBeVisible()
   await expect(page.getByText('Batteries')).toHaveCount(0)
 })
+
+test('Shop at Coles: a Coles search link per item, and a step-through that ticks', async ({
+  page,
+}) => {
+  await newHousehold(page, 'grocery-coles')
+  await page.goto(`/#/list/${WEEK}`)
+  for (const name of ['Batteries', 'Milk', 'Dishwasher tablets']) {
+    await page.getByLabel('Add an item').fill(name)
+    await page.getByRole('button', { name: 'Add' }).click()
+    await expect(item(page, name)).toBeVisible()
+  }
+  await expect.poll(() => checked(page, 'Dishwasher tablets')).toBe(false)
+
+  // Links only open Coles' own search in a new tab; the test never follows them.
+  const coles = item(page, 'Dishwasher tablets').getByRole('link', { name: /Search Coles/ })
+  await expect(coles).toHaveAttribute(
+    'href',
+    'https://www.coles.com.au/search/products?q=Dishwasher%20tablets',
+  )
+  await expect(coles).toHaveAttribute('target', '_blank')
+  await expect(coles).toHaveAttribute('rel', 'noopener noreferrer')
+
+  // Aisle order: dairy first, then Other (alphabetical).
+  const shop = page.getByRole('region', { name: 'Shop at Coles' })
+  await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  await expect(shop).toBeFocused() // keyboard focus moves into the step-through
+  await expect(shop).toContainText('Item 1 of 3')
+  await expect(shop.getByRole('link', { name: /Search Coles for Milk/ })).toHaveAttribute(
+    'href',
+    'https://www.coles.com.au/search/products?q=Milk',
+  )
+  await shop.getByRole('button', { name: 'Got it, tick and next' }).click()
+  await expect(item(page, 'Milk').getByRole('checkbox')).toBeChecked()
+  await expect(item(page, 'Milk').getByRole('link')).toHaveCount(0) // ticked: no Coles link
+  await expect.poll(() => checked(page, 'Milk')).toBe(true)
+
+  await expect(shop).toContainText('Item 2 of 3')
+  await expect(shop).toContainText('Batteries')
+  await shop.getByRole('button', { name: 'Skip' }).click()
+  await expect(shop).toContainText('Dishwasher tablets')
+  await shop.getByRole('button', { name: 'Got it, tick and next' }).click()
+  await expect(shop).toHaveCount(0)
+  await expect.poll(() => checked(page, 'Dishwasher tablets')).toBe(true)
+  expect(await checked(page, 'Batteries')).toBe(false)
+
+  // Starting again only steps through what's still unticked; Stop leaves it.
+  await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  await expect(shop).toContainText('Item 1 of 1')
+  await expect(shop).toContainText('Batteries')
+  await shop.getByRole('button', { name: 'Stop' }).click()
+  await expect(shop).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Shop at Coles' })).toBeFocused()
+  expect(await checked(page, 'Batteries')).toBe(false)
+})
