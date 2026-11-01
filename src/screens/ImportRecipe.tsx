@@ -148,7 +148,7 @@ function RecipeSearch({
         .results,
   })
   return (
-    <section className="flex flex-col gap-3" aria-label="Search for a recipe">
+    <section className="flex flex-col gap-3">
       <form
         role="search"
         className="flex flex-col gap-2"
@@ -160,7 +160,15 @@ function RecipeSearch({
       >
         <Label htmlFor="q">Search for a recipe</Label>
         <div className="flex gap-2">
-          <Input id="q" name="q" type="search" placeholder="e.g. chicken laksa" maxLength={100} />
+          <Input
+            id="q"
+            name="q"
+            type="search"
+            placeholder="e.g. chicken laksa"
+            minLength={2}
+            maxLength={100}
+            required
+          />
           <Button type="submit" variant="outline" disabled={search.isPending}>
             {search.isPending ? 'Searching…' : 'Search'}
           </Button>
