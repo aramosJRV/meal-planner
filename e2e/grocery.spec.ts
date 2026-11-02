@@ -282,3 +282,45 @@ test('Shop at Coles: a Coles search link per item, and a step-through that ticks
   await expect(page.getByRole('button', { name: 'Shop at Coles' })).toBeFocused()
   expect(await checked(page, 'Batteries')).toBe(false)
 })
+
+test('Shop at Coles: remember a product, then its links open that product', async ({ page }) => {
+  await newHousehold(page, 'grocery-coles-product')
+  await page.goto(`/#/list/${WEEK}`)
+  await page.getByLabel('Add an item').fill('Milk')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect.poll(() => checked(page, 'Milk')).toBe(false)
+
+  const shop = page.getByRole('region', { name: 'Shop at Coles' })
+  const paste = shop.getByLabel('Remember the product for next time')
+  await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  await paste.fill('https://www.coles.com.au/search/products?q=Milk')
+  await shop.getByRole('button', { name: 'Remember' }).click()
+  await expect(shop.getByRole('alert')).toContainText("isn't a Coles product link")
+
+  await paste.fill('https://www.coles.com.au/product/coles-full-cream-milk-2l-8150288?pid=x')
+  await shop.getByRole('button', { name: 'Remember' }).click()
+  const product = 'https://www.coles.com.au/product/coles-full-cream-milk-2l-8150288'
+  await expect(
+    shop.getByRole('link', { name: /Open Coles Full Cream Milk 2l on Coles/ }),
+  ).toHaveAttribute('href', product)
+  await expect(
+    item(page, 'Milk').getByRole('link', { name: /Open Coles Full Cream/ }),
+  ).toHaveAttribute('href', product)
+  const saved = (await api(page, 'rest/v1/coles_products?select=canonical_name,product_id'))
+    .body as { canonical_name: string; product_id: string }[]
+  expect(saved).toEqual([{ canonical_name: 'milk', product_id: '8150288' }])
+
+  // Saved for the household, not just this screen.
+  await page.reload()
+  await expect(
+    item(page, 'Milk').getByRole('link', { name: /Open Coles Full Cream/ }),
+  ).toHaveAttribute('href', product)
+
+  // Forget it: back to a Coles search.
+  await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  await shop.getByRole('button', { name: 'Forget product' }).click()
+  await expect(shop.getByRole('link', { name: /Search Coles for Milk/ })).toBeVisible()
+  await expect(
+    item(page, 'Milk').getByRole('link', { name: /Search Coles for Milk/ }),
+  ).toBeVisible()
+})

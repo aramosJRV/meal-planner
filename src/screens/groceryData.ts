@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { type QueryClient, useQuery } from '@tanstack/react-query'
+import type { ColesProduct } from '@/lib/coles'
 import type { Quantity } from '@/lib/groceryMerge'
 import { canonicalName } from '@/lib/ingredientLine'
 import { supabase } from '@/lib/supabase'
@@ -40,6 +41,24 @@ export function useGroceryList(householdId: string, weekStart: string) {
         .maybeSingle()
       if (error) throw error
       return data as unknown as List | null
+    },
+  })
+}
+
+// The household's remembered Coles products, by canonical name (the key manual items use for
+// their aisle), so plan and manual items for the same ingredient share one. Saved for offline.
+export const colesKey = (householdId: string) => ['grocery', householdId, 'coles']
+export function useColesProducts(householdId: string) {
+  return useQuery({
+    queryKey: colesKey(householdId),
+    networkMode: 'offlineFirst',
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('coles_products')
+        .select('canonical_name, product_id, slug, product_name')
+        .eq('household_id', householdId)
+      if (error) throw error
+      return data as (ColesProduct & { canonical_name: string })[]
     },
   })
 }
