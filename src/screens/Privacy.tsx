@@ -33,7 +33,7 @@ export default function Privacy() {
       <section className="flex flex-col gap-2">
         <h2 className={heading}>Who helps us run it</h2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Supabase stores your account and household data ([data location]).</li>
+          <li>Supabase stores your account and household data in Sydney, Australia.</li>
           <li>Netlify serves the website.</li>
           <li>
             Anthropic (Claude) reads the caption, web page or screenshots you import and sends back
