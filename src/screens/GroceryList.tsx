@@ -2,11 +2,15 @@ import { onlineManager, useMutation, useMutationState, useQueryClient } from '@t
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { colesProductUrl, colesSearch, parseColesProductUrl } from '@/lib/coles'
+import { canonicalName } from '@/lib/ingredientLine'
 import { weekStartFor } from '@/lib/planner'
 import { supabase } from '@/lib/supabase'
 import { formatQuantity, unitLabel } from '@/lib/units'
 import {
   type Add,
+  colesKey,
   GroceryError,
   type Item,
   type List,
@@ -15,6 +19,7 @@ import {
   type Rename,
   syncList,
   type Tick,
+  useColesProducts,
   useGroceryList,
 } from './groceryData'
 import { type Household, local, today } from './planData'
@@ -34,10 +39,6 @@ const AISLES: [string, string][] = [
   ['drinks', 'Drinks'],
   ['other', 'Other'],
 ]
-
-// Coles has no API for outside apps (DESIGN.md §7): we only link to its own product search.
-const colesSearch = (name: string) =>
-  `https://www.coles.com.au/search/products?q=${encodeURIComponent(name)}`
 
 const changes = (n: number) => (n === 1 ? '1 change' : `${n} changes`)
 
@@ -68,6 +69,9 @@ export default function GroceryList({
   const shopPanel = useRef<HTMLElement>(null)
   const wasShopping = useRef(false)
   const listId = list.data?.id
+  const coles = useColesProducts(household.id)
+  const productFor = (item: Item) =>
+    coles.data?.find((p) => p.canonical_name === canonicalName(item.display_name))
 
   const refresh = useMutation({
     mutationFn: () => syncList(household.id, weekStart),
@@ -203,15 +207,7 @@ export default function GroceryList({
               )}
             </p>
           </div>
-          <a
-            href={colesSearch(shopping.display_name)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants()}
-          >
-            Search Coles for {shopping.display_name}
-            <span className="sr-only"> (opens in a new tab)</span>
-          </a>
+          <ColesStep key={shopping.id} householdId={household.id} item={shopping} />
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => nextItem(true)}>
               Got it, tick and next
@@ -342,15 +338,7 @@ export default function GroceryList({
                       </label>
                     )}
                     {!item.checked && !item.stale && editing?.id !== item.id && (
-                      <a
-                        href={colesSearch(item.display_name)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={`Search Coles for ${item.display_name} (opens in a new tab)`}
-                        className={buttonVariants({ variant: 'ghost', className: 'px-2' })}
-                      >
-                        Coles
-                      </a>
+                      <ColesLink item={item} product={productFor(item)} />
                     )}
                     {item.source === 'manual' && editing?.id !== item.id && (
                       <>
@@ -419,5 +407,148 @@ export default function GroceryList({
         </form>
       )}
     </Screen>
+  )
+}
+
+type Product = NonNullable<ReturnType<typeof useColesProducts>['data']>[number]
+const newTab = { target: '_blank', rel: 'noopener noreferrer' }
+
+// The row's link: the remembered product's own page, or a Coles search for the item.
+function ColesLink({ item, product }: { item: Item; product?: Product }) {
+  return (
+    <a
+      {...newTab}
+      href={product ? colesProductUrl(product) : colesSearch(item.display_name)}
+      aria-label={
+        product
+          ? `Open ${product.product_name} on Coles for ${item.display_name} (opens in a new tab)`
+          : `Search Coles for ${item.display_name} (opens in a new tab)`
+      }
+      className={buttonVariants({ variant: 'ghost', className: 'px-2' })}
+    >
+      Coles
+    </a>
+  )
+}
+
+// Step-through: open the remembered product, or search and paste the product's link to remember
+// it for the household. Saving needs a signal (it isn't queued like ticks).
+function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
+  const queryClient = useQueryClient()
+  const products = useColesProducts(householdId)
+  const name = canonicalName(item.display_name)
+  const product = products.data?.find((p) => p.canonical_name === name)
+  const [picking, setPicking] = useState(false)
+  const [pasted, setPasted] = useState('')
+  const [invalid, setInvalid] = useState(false)
+  const save = useMutation({
+    mutationFn: async (next: Omit<Product, 'canonical_name'> | null) => {
+      const { error } = next
+        ? await supabase
+            .from('coles_products')
+            .upsert(
+              { household_id: householdId, canonical_name: name, ...next },
+              { onConflict: 'household_id,canonical_name' },
+            )
+        : await supabase
+            .from('coles_products')
+            .delete()
+            .eq('household_id', householdId)
+            .eq('canonical_name', name)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      setPicking(false)
+      setPasted('')
+    },
+    onError: (e) => console.error('coles product', e),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: colesKey(householdId) }),
+  })
+
+  return (
+    <>
+      {product ? (
+        <a {...newTab} href={colesProductUrl(product)} className={buttonVariants()}>
+          Open {product.product_name} on Coles
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      ) : (
+        <a {...newTab} href={colesSearch(item.display_name)} className={buttonVariants()}>
+          Search Coles for {item.display_name}
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+      )}
+      {product && !picking && (
+        <div className="flex gap-2">
+          <Button variant="ghost" className="px-2" onClick={() => setPicking(true)}>
+            Change product
+          </Button>
+          <Button
+            variant="ghost"
+            className="px-2"
+            disabled={save.isPending}
+            onClick={() => save.mutate(null)}
+          >
+            Forget product
+          </Button>
+        </div>
+      )}
+      {products.data && (!product || picking) && (
+        <form
+          noValidate
+          className="flex flex-col gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const next = parseColesProductUrl(pasted)
+            setInvalid(!next)
+            if (next) save.mutate(next)
+          }}
+        >
+          <Label htmlFor={`coles-${item.id}`}>Remember the product for next time</Label>
+          <p className="text-muted-foreground text-sm">
+            {product ? 'Find another product' : 'Find the product'} on Coles, copy its link from the
+            address bar and paste it here.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              id={`coles-${item.id}`}
+              placeholder="https://www.coles.com.au/product/…"
+              maxLength={500}
+              type="url"
+              aria-invalid={invalid}
+              aria-describedby={invalid ? `coles-${item.id}-error` : undefined}
+              value={pasted}
+              onChange={(e) => {
+                setPasted(e.target.value)
+                setInvalid(false)
+              }}
+            />
+            <Button type="submit" variant="outline" disabled={save.isPending}>
+              Remember
+            </Button>
+            {picking && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-2"
+                onClick={() => {
+                  setPicking(false)
+                  setInvalid(false)
+                }}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+      {(invalid || save.isError) && (
+        <p id={`coles-${item.id}-error`} role="alert" className="text-destructive text-sm">
+          {invalid
+            ? "That isn't a Coles product link. It should start with https://www.coles.com.au/product/"
+            : "Couldn't save that. Check your connection and try again."}
+        </p>
+      )}
+    </>
   )
 }
