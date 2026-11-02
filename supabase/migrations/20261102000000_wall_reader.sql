@@ -2,7 +2,12 @@
 -- It sees one household's planned meals, their recipes' titles and ingredient names and aisles, and writes nothing.
 -- Set up by hand, never in git: the household is one row in wall_household; the password is
 -- alter role wall_reader login password '...'.
-create role wall_reader nologin noinherit;
+-- Roles are shared across the server, so a local stack that already has one skips this.
+do $$ begin
+  if not exists (select from pg_roles where rolname = 'wall_reader') then
+    create role wall_reader nologin noinherit;
+  end if;
+end $$;
 
 create table public.wall_household (
   household_id uuid primary key references public.households (id) on delete cascade,

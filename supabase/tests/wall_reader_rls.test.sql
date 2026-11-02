@@ -26,11 +26,13 @@ insert into public.ingredients (household_id, name, canonical_name, aisle_catego
   (pg_temp.v('ha'), 'Secret A', 'secret a', 'meat_seafood'), (pg_temp.v('hb'), 'Secret B', 'secret b', 'frozen');
 insert into public.recipe_ingredients (recipe_id, household_id, ingredient_id, raw_text, position)
   select r.id, r.household_id, i.id, i.name, 1
-  from public.recipes r join public.ingredients i on i.household_id = r.household_id;
+  from public.recipes r join public.ingredients i on i.household_id = r.household_id
+  where r.household_id in (pg_temp.v('ha'), pg_temp.v('hb'));
 insert into public.meal_plans (household_id, week_start) values (pg_temp.v('ha'), '2026-11-02'), (pg_temp.v('hb'), '2026-11-02');
 insert into public.meal_plan_entries (meal_plan_id, household_id, date, slot, recipe_id, servings)
   select p.id, p.household_id, '2026-11-03', 'dinner', r.id, 4
-  from public.meal_plans p join public.recipes r on r.household_id = p.household_id;
+  from public.meal_plans p join public.recipes r on r.household_id = p.household_id
+  where p.household_id in (pg_temp.v('ha'), pg_temp.v('hb'));
 
 -- ── before the household is set: nothing ─────────────────────────────────
 set local role wall_reader;
