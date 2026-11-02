@@ -493,7 +493,7 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
           </Button>
         </div>
       )}
-      {(!product || picking) && (
+      {products.data && (!product || picking) && (
         <form
           className="flex flex-col gap-2"
           onSubmit={(e) => {
@@ -511,12 +511,16 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
           <div className="flex gap-2">
             <Input
               id={`coles-${item.id}`}
-              inputMode="url"
               placeholder="https://www.coles.com.au/product/…"
               maxLength={500}
+              type="url"
               aria-invalid={invalid}
+              aria-describedby={invalid ? `coles-${item.id}-error` : undefined}
               value={pasted}
-              onChange={(e) => setPasted(e.target.value)}
+              onChange={(e) => {
+                setPasted(e.target.value)
+                setInvalid(false)
+              }}
             />
             <Button type="submit" variant="outline" disabled={save.isPending}>
               Remember
@@ -526,7 +530,10 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
                 type="button"
                 variant="ghost"
                 className="px-2"
-                onClick={() => setPicking(false)}
+                onClick={() => {
+                  setPicking(false)
+                  setInvalid(false)
+                }}
               >
                 Cancel
               </Button>
@@ -535,7 +542,7 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
         </form>
       )}
       {(invalid || save.isError) && (
-        <p role="alert" className="text-destructive text-sm">
+        <p id={`coles-${item.id}-error`} role="alert" className="text-destructive text-sm">
           {invalid
             ? "That isn't a Coles product link. It should start with https://www.coles.com.au/product/"
             : "Couldn't save that. Check your connection and try again."}
