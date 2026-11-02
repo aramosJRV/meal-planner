@@ -324,3 +324,57 @@ test('Shop at Coles: remember a product, then its links open that product', asyn
     item(page, 'Milk').getByRole('link', { name: /Search Coles for Milk/ }),
   ).toBeVisible()
 })
+
+test('Fill my Coles trolley hands the add-on the unticked items, remembered products first', async ({
+  page,
+}) => {
+  await newHousehold(page, 'grocery-coles-addon')
+  await page.goto(`/#/list/${WEEK}`)
+  for (const name of ['Milk', 'Bread', 'Eggs']) {
+    await page.getByLabel('Add an item').fill(name)
+    await page.getByRole('button', { name: 'Add' }).click()
+    await expect.poll(() => checked(page, name)).toBe(false)
+  }
+  const shop = page.getByRole('region', { name: 'Shop at Coles' })
+  await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  for (const [name, link] of [
+    ['Bread', 'skip'], // step-through order: aisle, then A to Z
+    ['Eggs', 'coles-free-range-eggs-12-pack-3359587'],
+    ['Milk', 'coles-full-cream-milk-2l-8150288'],
+  ]) {
+    await expect(shop.getByText(name, { exact: true })).toBeVisible()
+    if (link !== 'skip') {
+      await shop
+        .getByLabel('Remember the product for next time')
+        .fill(`https://www.coles.com.au/product/${link}`)
+      await shop.getByRole('button', { name: 'Remember' }).click()
+      await expect(shop.getByRole('link', { name: /^Open .* on Coles/ })).toBeVisible()
+    }
+    await shop.getByRole('button', { name: 'Skip' }).click()
+  }
+  await tick(page, 'Eggs') // already have it: left out
+
+  // Without the add-on, no button.
+  await expect(page.getByRole('button', { name: 'Fill my Coles trolley' })).toHaveCount(0)
+
+  // A stand-in for extension/app.js: marks the page, records the list and answers.
+  // (A string: the e2e project has no browser types.)
+  await page.addInitScript(`
+    // Init scripts can run before <html> exists; this still runs before the app's scripts.
+    document.addEventListener('readystatechange', () => {
+      document.documentElement.dataset.colesTrolleyAddon = '1'
+    }, { once: true })
+    window.addEventListener('message', (e) => {
+      if (e.data?.type !== 'meal-planner:fill-coles-trolley') return
+      window.sent = e.data.list
+      window.postMessage({ type: 'meal-planner:fill-coles-trolley:reply', ok: true }, '*')
+    })
+  `)
+  await page.reload()
+  await page.getByRole('button', { name: 'Fill my Coles trolley' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Coles is opening' })).toBeVisible()
+  expect(await page.evaluate('window.sent')).toEqual({
+    products: [{ product_id: '8150288', slug: 'coles-full-cream-milk-2l', name: 'Milk' }],
+    missing: ['Bread'],
+  })
+})
