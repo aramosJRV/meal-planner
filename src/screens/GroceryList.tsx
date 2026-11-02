@@ -72,6 +72,9 @@ export default function GroceryList({
   const coles = useColesProducts(household.id)
   const productFor = (item: Item) =>
     coles.data?.find((p) => p.canonical_name === canonicalName(item.display_name))
+  // The Coles trolley add-on (extension/) marks the page when it's installed in this browser.
+  const hasAddon = document.documentElement.dataset.colesTrolleyAddon === '1'
+  const [trolley, setTrolley] = useState<{ ok: boolean; text: string } | null>(null)
 
   const refresh = useMutation({
     mutationFn: () => syncList(household.id, weekStart),
@@ -148,6 +151,33 @@ export default function GroceryList({
     setShop(shop.at + 1 < shop.items.length ? { ...shop, at: shop.at + 1 } : null)
   }
 
+  // The add-on's answer to "Fill my Coles trolley" (extension/app.js).
+  useEffect(() => {
+    const onReply = (e: MessageEvent) => {
+      if (e.source !== window || e.origin !== location.origin) return
+      if (e.data?.type !== 'meal-planner:fill-coles-trolley:reply') return
+      setTrolley(
+        e.data.ok
+          ? { ok: true, text: 'Coles is opening in a new tab. Leave it open while it fills.' }
+          : { ok: false, text: String(e.data.error ?? 'The Coles add-on couldn’t start.') },
+      )
+    }
+    window.addEventListener('message', onReply)
+    return () => window.removeEventListener('message', onReply)
+  }, [])
+  const fillTrolley = () => {
+    const products = toBuy.flatMap((i) => {
+      const p = productFor(i)
+      return p ? [{ product_id: p.product_id, slug: p.slug, name: i.display_name }] : []
+    })
+    const missing = toBuy.filter((i) => !productFor(i)).map((i) => i.display_name)
+    setTrolley(null)
+    window.postMessage(
+      { type: 'meal-planner:fill-coles-trolley', list: { products, missing } },
+      location.origin,
+    )
+  }
+
   // Keyboard focus follows the step-through in and out (the button that opened it may be gone).
   const shopOpen = !!shop
   useEffect(() => {
@@ -179,6 +209,19 @@ export default function GroceryList({
           >
             Shop at Coles
           </Button>
+        )}
+        {hasAddon && toBuy.some(productFor) && (
+          <Button variant="outline" className="lg:self-start lg:px-10" onClick={fillTrolley}>
+            Fill my Coles trolley
+          </Button>
+        )}
+        {trolley && (
+          <p
+            role={trolley.ok ? 'status' : 'alert'}
+            className={trolley.ok ? 'text-sm' : 'text-destructive text-sm'}
+          >
+            {trolley.text}
+          </p>
         )}
         {refresh.isError && (
           <p role="alert" className="text-destructive text-sm">
