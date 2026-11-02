@@ -46,6 +46,8 @@ async function addHere(job) {
   if (challenged()) return 'stop'
   if (!ready || document.querySelector(UNAVAILABLE)) return 'failed'
   if (document.querySelector(IN_TROLLEY)) return 'already'
+  // The shopper may have pressed Stop while we waited.
+  if ((await send({ type: 'job' }))?.status !== 'running') return 'stop'
   // shortcut: always 1 of each product; the shopper changes amounts in the trolley. Upgrade
   // when the list can say how many packs it needs.
   document.querySelector(ADD).click()

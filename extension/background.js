@@ -9,11 +9,15 @@ const FAILS_IN_A_ROW = 3
 const load = async () => (await chrome.storage.local.get('job')).job ?? null
 const save = (job) => chrome.storage.local.set({ job })
 
+// One message at a time: each reads, changes and saves the job, so a Stop can't be overwritten.
+let queue = Promise.resolve()
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
-  handle(msg, sender).then(reply, (e) => {
-    console.error('coles trolley', e)
-    reply({ error: 'Something went wrong in the Coles add-on. Please try again.' })
-  })
+  queue = queue
+    .then(() => handle(msg, sender))
+    .then(reply, (e) => {
+      console.error('coles trolley', e)
+      reply({ error: 'Something went wrong in the Coles add-on. Please try again.' })
+    })
   return true
 })
 
