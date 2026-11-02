@@ -3,6 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(20);
+grant wall_reader to postgres;  -- lets the test switch to it (rolled back with the rest)
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local'),
