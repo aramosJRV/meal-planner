@@ -495,6 +495,7 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
       )}
       {products.data && (!product || picking) && (
         <form
+          noValidate
           className="flex flex-col gap-2"
           onSubmit={(e) => {
             e.preventDefault()
