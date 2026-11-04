@@ -1,4 +1,4 @@
-import { MAX_ITEMS, parseList, pickBest, productUrl, searchUrl } from './list.js'
+import { MAX_ITEMS, knownResults, parseList, pickBest, productUrl, searchUrl } from './list.js'
 
 const milk = { product_id: '8150288', slug: 'coles-full-cream-milk-2l', name: 'Milk' }
 
@@ -86,4 +86,20 @@ describe('pickBest', () => {
     [[{ ...hit, brand: '', name: '!!!', size: '' }]],
     [[null]],
   ])('finds nothing usable in %j', (results) => expect(pickBest(results)).toBeNull())
+})
+
+describe('knownResults', () => {
+  const product = { _type: 'PRODUCT', id: 1, availability: false }
+
+  it.each([[[]], [[{ _type: 'SINGLE_TILE' }, product]]])('knows %j', (results) =>
+    expect(knownResults(results)).toBe(true),
+  )
+
+  it.each([
+    [null],
+    [[{ _type: 'SINGLE_TILE' }]],
+    [[{ ...product, _type: 'ITEM' }]],
+    [[{ ...product, availability: 'yes' }]],
+    [[{ ...product, id: undefined }]],
+  ])('calls %j a changed page', (results) => expect(knownResults(results)).toBe(false))
 })

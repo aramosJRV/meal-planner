@@ -57,7 +57,8 @@ add-on's card in `chrome://extensions`.
   page instead and sends the results in the page's `__NEXT_DATA__` to `background.js`, where
   `pickBest` (`list.js`, unit tested) chooses: `_type` `PRODUCT`, no `adId`, `availability` true.
   It then presses Add in that product's `product-tile`. No usable result isn't a failure: the
-  item is listed as not added, with its search link.
+  item is listed as not added, with its search link. Results it can't read (`knownResults`)
+  count as a failure, so a Coles change stops the run instead of looking like "no match".
 - When the fill ends, `background.js` sends the picks to the Meal Planner tab that started it
   (`app.js` → `meal-planner:coles-picks`). The signed-in Shopping screen saves them to
   `coles_products` without replacing an existing row, so the add-on needs no login.

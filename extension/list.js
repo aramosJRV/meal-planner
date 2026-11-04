@@ -38,6 +38,15 @@ export const productUrl = (p) => `https://www.coles.com.au/product/${p.slug}-${p
 export const searchUrl = (name) =>
   `https://www.coles.com.au/search/products?q=${encodeURIComponent(name)}`
 
+// Whether search results look the way we know: none at all, or products we can read. If not,
+// Coles has changed its page, which must not pass for "no match".
+export const knownResults = (results) =>
+  Array.isArray(results) &&
+  (!results.length ||
+    results.some(
+      (r) => r?._type === 'PRODUCT' && typeof r.availability === 'boolean' && ID.test(String(r.id)),
+    ))
+
 // The best match on a Coles search page: the first result that's a real product (not a banner,
 // a "Goes well together" extra or a sponsored ad) and in stock. Results are read from Coles, so
 // they're untrusted. The slug is made from the name: Coles redirects any slug to the product's

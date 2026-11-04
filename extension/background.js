@@ -1,10 +1,11 @@
 // Keeps the one trolley fill that's running (or just finished) and hands it to coles.js in
 // the Coles tab it opened. Nothing here signs in to anything or talks to Coles itself.
-import { parseList, pickBest, productUrl, searchUrl } from './list.js'
+import { knownResults, parseList, pickBest, productUrl, searchUrl } from './list.js'
 
 const APP = 'https://jrv-meal-planner.netlify.app'
 // 'none': Coles had nothing usable for that item, which says nothing about Coles's website.
 const RESULTS = ['added', 'already', 'failed', 'none', 'stop']
+const IN_TROLLEY = ['added', 'already']
 const FAILS_IN_A_ROW = 3
 
 const load = async () => (await chrome.storage.local.get('job')).job ?? null
@@ -59,15 +60,24 @@ async function handle(msg, sender) {
       job.opened = job.at
       break
     case 'pick': {
-      if (job.status !== 'running') return null
+      if (job.status !== 'running') return { result: 'stop' }
       const pick = pickBest(msg.results)
-      if (!pick) return null
+      if (!pick) return { result: knownResults(msg.results) ? 'none' : 'failed' }
       job.picks[job.at] = { ...pick, url: productUrl(pick) }
       await save(job)
-      return pick
+      return { pick }
     }
     case 'result':
-      if (job.status !== 'running' || !RESULTS.includes(msg.result)) return job
+      if (!RESULTS.includes(msg.result)) return job
+      if (job.status !== 'running') {
+        // Stop can land while Coles confirms an Add already pressed: that item is in the trolley.
+        if (job.status !== 'stopped' || !IN_TROLLEY.includes(msg.result)) return job
+        if (job.results.length !== job.at) return job
+        job.results.push(msg.result)
+        job.at++
+        job.remembered = false
+        break
+      }
       if (msg.result === 'stop') {
         job.status = 'stopped'
         job.reason =
@@ -107,7 +117,7 @@ async function handle(msg, sender) {
 function remember(job) {
   const picks = job.products.flatMap((p, i) => {
     const pick = job.picks[i]
-    if (!pick || !['added', 'already'].includes(job.results[i])) return []
+    if (!pick || !IN_TROLLEY.includes(job.results[i])) return []
     const { product_id, slug, title } = pick
     return [{ name: p.name, product_id, slug, product_name: title }]
   })

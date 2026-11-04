@@ -227,7 +227,7 @@ export default function GroceryList({
             Shop at Coles
           </Button>
         )}
-        {hasAddon && toBuy.length > 0 && (
+        {hasAddon && coles.data && toBuy.length > 0 && (
           <Button variant="outline" className="lg:self-start lg:px-10" onClick={fillTrolley}>
             Fill my Coles trolley
           </Button>
