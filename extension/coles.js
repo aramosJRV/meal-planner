@@ -9,6 +9,8 @@ const IN_TROLLEY = '[data-testid="quantity-input"]'
 const UNAVAILABLE = '[data-testid="shop-alts-btn"]'
 const WAIT_MS = 15000
 const SETTLE_MS = 2500
+// Coles adds its "Bought before" tags after the page loads, and only for a signed-in shopper.
+const BOUGHT_WAIT_MS = 3000
 const PAUSE_MS = [2000, 4000]
 
 const send = (msg) => chrome.runtime.sendMessage(msg)
@@ -30,12 +32,8 @@ const challenged = () =>
     'iframe[src*="incapsula" i], iframe[src*="captcha" i], [id*="captcha" i]',
   )
 
-const productPage = () => document.querySelector('[data-testid="product-buy"]')
-
-// 'added' | 'already' | 'failed' (this product only) | 'stop' (stop everything)
-// box finds the part of the page with this product's buttons; Coles can redraw it at any time.
-async function addHere(job, box = productPage) {
-  if (challenged()) return 'stop'
+// Before pressing or reading anything that depends on the shopper's own trolley or account.
+async function settle(job) {
   // Coles loads the trolley only once its page has focus. Before that, Add presses are ignored
   // and products already in the trolley still show Add, so wait for the shopper, then settle.
   if (!document.hasFocus()) {
@@ -44,6 +42,14 @@ async function addHere(job, box = productPage) {
     show(job)
   }
   await sleep(SETTLE_MS)
+}
+
+const productPage = () => document.querySelector('[data-testid="product-buy"]')
+
+// 'added' | 'already' | 'failed' (this product only) | 'stop' (stop everything)
+// box finds the part of the page with this product's buttons; Coles can redraw it at any time.
+async function addHere(job, box = productPage) {
+  if (challenged()) return 'stop'
   // A sold-out or missing product shows no Add button: that product fails. If Coles changed
   // its page, every product fails and background.js stops after a few in a row.
   const find = (what) => box()?.querySelector(what)
@@ -81,17 +87,34 @@ function searchResults() {
   }
 }
 
+const tiles = () => [...document.querySelectorAll('[data-testid="product-tile"]')]
+
+// The ids of the products on this page that Coles tags "Bought before" for the signed-in shopper.
+// A guest, a shopper without Flybuys or a changed page gives none, and the top result is used.
+const boughtBefore = () =>
+  tiles().flatMap((tile) => {
+    const tags = [...tile.querySelectorAll('.product__top_messaging__item')]
+    if (!tags.some((tag) => tag.textContent.trim() === 'Bought before')) return []
+    const id = tile
+      .querySelector('a[href*="/product/"]')
+      ?.getAttribute('href')
+      ?.match(/-(\d+)$/)
+    return id ? [id[1]] : []
+  })
+
 // On the search page for an item: adds the best match, if Coles has one.
 async function pickHere(job) {
   if (challenged()) return 'stop'
   const results = searchResults()
   if (!results) return 'failed'
-  const { pick, result } = (await send({ type: 'pick', results })) ?? { result: 'stop' }
+  await waitFor(() => boughtBefore().length, BOUGHT_WAIT_MS)
+  if (challenged()) return 'stop'
+  const { pick, result } = (await send({ type: 'pick', results, bought: boughtBefore() })) ?? {
+    result: 'stop',
+  }
   if (!pick) return result ?? 'stop'
   return addHere(job, () =>
-    [...document.querySelectorAll('[data-testid="product-tile"]')].find((tile) =>
-      tile.querySelector(`a[href$="-${pick.product_id}"]`),
-    ),
+    tiles().find((tile) => tile.querySelector(`a[href$="-${pick.product_id}"]`)),
   )
 }
 
@@ -113,6 +136,7 @@ async function run() {
     if (job.opened === job.at) job = await send({ type: 'result', result: 'failed' })
     else return go(job)
   } else {
+    await settle(job)
     job = await send({
       type: 'result',
       result: await (item.search ? pickHere(job) : addHere(job)),
@@ -190,11 +214,12 @@ function show(job, needsFocus = false) {
     )
     const inTrolley = (i) => results[i] === 'added' || results[i] === 'already'
     const note = (i) => (results[i] === 'already' ? 'was already in the trolley' : undefined)
-    const picked = products.flatMap((p, i) =>
-      inTrolley(i) && picks[i]
-        ? [{ lead: `${p.name} → `, name: picks[i].title, url: picks[i].url, note: note(i) }]
-        : [],
-    )
+    const picked = (bought) =>
+      products.flatMap((p, i) =>
+        inTrolley(i) && picks[i] && !!picks[i].bought === bought
+          ? [{ lead: `${p.name} → `, name: picks[i].title, url: picks[i].url, note: note(i) }]
+          : [],
+      )
     const added = products.flatMap((p, i) =>
       inTrolley(i) && !picks[i] ? [{ name: p.name, note: note(i) }] : [],
     )
@@ -209,7 +234,8 @@ function show(job, needsFocus = false) {
             },
           ],
     )
-    list('Picked for you – check these', picked)
+    list('Best guesses – check these', picked(false))
+    list('From your Bought before', picked(true))
     list('Added', added)
     list('Not added – add these yourself', notAdded)
     el('button', 'Close').onclick = async () => show(await send({ type: 'clear' }))

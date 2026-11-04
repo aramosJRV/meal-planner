@@ -61,7 +61,7 @@ async function handle(msg, sender) {
       break
     case 'pick': {
       if (job.status !== 'running') return { result: 'stop' }
-      const pick = pickBest(msg.results)
+      const pick = pickBest(msg.results, msg.bought)
       if (!pick) return { result: knownResults(msg.results) ? 'none' : 'failed' }
       job.picks[job.at] = { ...pick, url: productUrl(pick) }
       await save(job)
@@ -113,12 +113,13 @@ async function handle(msg, sender) {
   return job
 }
 
-// Hands what was picked to the Meal Planner tab, which is signed in and saves it so next week
-// uses the same products. If that tab has gone, they're just picked again next time.
+// Hands the Bought before picks to the Meal Planner tab, which is signed in and saves them so
+// next week uses the same products. Best guesses aren't saved: a wrong one mustn't stick. If that
+// tab has gone, they're just picked again next time.
 function remember(job) {
   const picks = job.products.flatMap((p, i) => {
     const pick = job.picks[i]
-    if (!pick || !IN_TROLLEY.includes(job.results[i])) return []
+    if (!pick?.bought || !IN_TROLLEY.includes(job.results[i])) return []
     const { product_id, slug, title } = pick
     return [{ name: p.name, product_id, slug, product_name: title }]
   })

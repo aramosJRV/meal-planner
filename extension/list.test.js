@@ -66,7 +66,27 @@ describe('pickBest', () => {
       product_id: '4803991',
       slug: 'coles-brown-onions-1kg',
       title: 'Coles Brown Onions 1kg',
+      bought: false,
     }))
+
+  it('prefers the first in-stock product bought before, even an ad', () => {
+    const results = [
+      hit,
+      { ...hit, id: 2, availability: false },
+      { ...hit, id: 3, adId: 'display_abc' },
+      { ...hit, id: 4 },
+    ]
+    expect(pickBest(results, ['2', '3', '4'])).toMatchObject({ product_id: '3', bought: true })
+  })
+
+  it.each([[undefined], [[]], ['4803991'], [['999']]])(
+    'falls back to the first result with bought before as %j',
+    (bought) =>
+      expect(pickBest([hit], bought)).toMatchObject({ product_id: '4803991', bought: false }),
+  )
+
+  it('never picks a banner or an extra because of bought before', () =>
+    expect(pickBest([{ ...hit, _type: 'PRODUCT_ASSOCIATION' }], ['4803991'])).toBeNull())
 
   it('makes a slug the app and database accept from any name', () =>
     expect(

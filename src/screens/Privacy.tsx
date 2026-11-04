@@ -22,6 +22,10 @@ export default function Privacy() {
             Captions, web addresses and screenshots you choose to import. We keep these with your
             household's imports.
           </li>
+          <li>
+            The Coles products remembered for your shopping list, so the same ones can be added next
+            time. We don't keep your Coles purchase history or login.
+          </li>
           <li>A count of how many imports your household runs each day, to keep costs fair.</li>
         </ul>
         <p>

@@ -47,23 +47,33 @@ export const knownResults = (results) =>
       (r) => r?._type === 'PRODUCT' && typeof r.availability === 'boolean' && ID.test(String(r.id)),
     ))
 
-// The best match on a Coles search page: the first result that's a real product (not a banner,
-// a "Goes well together" extra or a sponsored ad) and in stock. Results are read from Coles, so
-// they're untrusted. The slug is made from the name: Coles redirects any slug to the product's
-// current page, and the id is what counts.
-export function pickBest(results) {
+// A real, in-stock product from a Coles search page, as { product_id, slug, title }. Results are
+// read from Coles, so they're untrusted. The slug is made from the name: Coles redirects any slug
+// to the product's current page, and the id is what counts.
+function usable(r) {
+  if (r?._type !== 'PRODUCT' || r.availability !== true) return null
+  const product_id = String(r.id)
+  const title = text([r.brand, r.name, r.size].filter((v) => typeof v === 'string').join(' '))
+  if (!ID.test(product_id) || !title) return null
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return slug ? { product_id, slug, title } : null
+}
+
+// The best match on a Coles search page: the first product the shopper has bought before (bought
+// is a list of product ids; an ad counts here, she chose it herself), otherwise the first that
+// isn't a banner, a "Goes well together" extra or a sponsored ad.
+export function pickBest(results, bought = []) {
   if (!Array.isArray(results)) return null
+  const known = new Set(Array.isArray(bought) ? bought : [])
+  let guess = null
   for (const r of results) {
-    if (r?._type !== 'PRODUCT' || r.adId || r.availability !== true) continue
-    const product_id = String(r.id)
-    const title = text([r.brand, r.name, r.size].filter((v) => typeof v === 'string').join(' '))
-    if (!ID.test(product_id) || !title) continue
-    const slug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-    if (!slug) continue
-    return { product_id, slug, title }
+    const product = usable(r)
+    if (!product) continue
+    if (known.has(product.product_id)) return { ...product, bought: true }
+    if (!guess && !r.adId) guess = { ...product, bought: false }
   }
-  return null
+  return guess
 }
