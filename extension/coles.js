@@ -87,7 +87,7 @@ async function pickHere(job) {
   const results = searchResults()
   if (!results) return 'failed'
   const { pick, result } = (await send({ type: 'pick', results })) ?? { result: 'stop' }
-  if (!pick) return result
+  if (!pick) return result ?? 'stop'
   return addHere(job, () =>
     [...document.querySelectorAll('[data-testid="product-tile"]')].find((tile) =>
       tile.querySelector(`a[href$="-${pick.product_id}"]`),

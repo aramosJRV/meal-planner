@@ -71,10 +71,10 @@ async function handle(msg, sender) {
       if (!RESULTS.includes(msg.result)) return job
       if (job.status !== 'running') {
         // Stop can land while Coles confirms an Add already pressed: that item is in the trolley.
-        if (job.status !== 'stopped' || !IN_TROLLEY.includes(msg.result)) return job
-        if (job.results.length !== job.at) return job
+        if (job.at !== job.stoppedAt || !IN_TROLLEY.includes(msg.result)) return job
         job.results.push(msg.result)
         job.at++
+        delete job.stoppedAt
         job.remembered = false
         break
       }
@@ -97,6 +97,7 @@ async function handle(msg, sender) {
       if (job.status !== 'running') return job
       job.status = 'stopped'
       job.reason = 'You stopped it.'
+      job.stoppedAt = job.at
       break
     case 'clear':
       await chrome.storage.local.remove('job')
