@@ -2,7 +2,7 @@
 
 A small add-on for Chrome on a laptop. On the Meal Planner Shopping list, press
 **Fill my Coles trolley**: Coles opens in a new tab and the add-on adds every unticked item to
-your own trolley, one at a time, with nothing to set up. A 20-item list takes about 3 minutes.
+your own trolley, one at a time, with nothing to set up. A 20-item list takes 3 to 4 minutes.
 For each item it uses the Coles product remembered for it. If there isn't one, it searches Coles
 for the item and adds something you've bought before if Coles shows one (this needs you logged
 in to Coles with Flybuys linked), otherwise its best guess: the first result that's in stock and
