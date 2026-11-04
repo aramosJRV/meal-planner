@@ -8,6 +8,7 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const text = (v) => (typeof v === 'string' && v.trim() && v.length <= MAX_TEXT ? v.trim() : null)
 
 // { products: [{ product_id, slug, name }], missing: [name] } → the same, cleaned, or null.
+// products have a remembered Coles product; missing are searched for on Coles.
 export function parseList(input) {
   if (!input || typeof input !== 'object') return null
   const { products, missing } = input
@@ -36,3 +37,24 @@ export const productUrl = (p) => `https://www.coles.com.au/product/${p.slug}-${p
 
 export const searchUrl = (name) =>
   `https://www.coles.com.au/search/products?q=${encodeURIComponent(name)}`
+
+// The best match on a Coles search page: the first result that's a real product (not a banner,
+// a "Goes well together" extra or a sponsored ad) and in stock. Results are read from Coles, so
+// they're untrusted. The slug is made from the name: Coles redirects any slug to the product's
+// current page, and the id is what counts.
+export function pickBest(results) {
+  if (!Array.isArray(results)) return null
+  for (const r of results) {
+    if (r?._type !== 'PRODUCT' || r.adId || r.availability !== true) continue
+    const product_id = String(r.id)
+    const title = text([r.brand, r.name, r.size].filter((v) => typeof v === 'string').join(' '))
+    if (!ID.test(product_id) || !title) continue
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+    if (!slug) continue
+    return { product_id, slug, title }
+  }
+  return null
+}

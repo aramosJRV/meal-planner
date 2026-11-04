@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { colesProductUrl, colesSearch, parseColesProductUrl } from '@/lib/coles'
+import { colesProductUrl, colesSearch, parseColesProductUrl, pickedProducts } from '@/lib/coles'
 import { canonicalName } from '@/lib/ingredientLine'
 import { weekStartFor } from '@/lib/planner'
 import { supabase } from '@/lib/supabase'
@@ -165,6 +165,23 @@ export default function GroceryList({
     window.addEventListener('message', onReply)
     return () => window.removeEventListener('message', onReply)
   }, [])
+  // The products the add-on picked on Coles: remembered, so next week uses the same ones. Never
+  // replaces a product the household already has for that item. Quiet: nothing depends on it.
+  useEffect(() => {
+    const onPicks = async (e: MessageEvent) => {
+      if (e.source !== window || e.origin !== location.origin) return
+      if (e.data?.type !== 'meal-planner:coles-picks') return
+      const rows = pickedProducts(e.data.picks).map((p) => ({ household_id: household.id, ...p }))
+      if (!rows.length) return
+      const { error } = await supabase
+        .from('coles_products')
+        .upsert(rows, { onConflict: 'household_id,canonical_name', ignoreDuplicates: true })
+      if (error) console.error('coles picks', error)
+      queryClient.invalidateQueries({ queryKey: colesKey(household.id) })
+    }
+    window.addEventListener('message', onPicks)
+    return () => window.removeEventListener('message', onPicks)
+  }, [household.id, queryClient])
   const fillTrolley = () => {
     const products = toBuy.flatMap((i) => {
       const p = productFor(i)
@@ -210,7 +227,7 @@ export default function GroceryList({
             Shop at Coles
           </Button>
         )}
-        {hasAddon && toBuy.some(productFor) && (
+        {hasAddon && toBuy.length > 0 && (
           <Button variant="outline" className="lg:self-start lg:px-10" onClick={fillTrolley}>
             Fill my Coles trolley
           </Button>
@@ -474,8 +491,9 @@ function ColesLink({ item, product }: { item: Item; product?: Product }) {
   )
 }
 
-// Step-through: open the remembered product, or search and paste the product's link to remember
-// it for the household. Saving needs a signal (it isn't queued like ticks).
+// Step-through: open the remembered product or search for it. Choosing the product by pasting
+// its link is tucked away: the trolley add-on picks products by itself. Saving needs a signal
+// (it isn't queued like ticks).
 function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
   const queryClient = useQueryClient()
   const products = useColesProducts(householdId)
@@ -521,6 +539,11 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
           <span className="sr-only"> (opens in a new tab)</span>
         </a>
       )}
+      {!product && !picking && (
+        <Button variant="ghost" className="self-start px-2" onClick={() => setPicking(true)}>
+          Choose a product
+        </Button>
+      )}
       {product && !picking && (
         <div className="flex gap-2">
           <Button variant="ghost" className="px-2" onClick={() => setPicking(true)}>
@@ -536,7 +559,7 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
           </Button>
         </div>
       )}
-      {products.data && (!product || picking) && (
+      {products.data && picking && (
         <form
           noValidate
           className="flex flex-col gap-2"
@@ -569,19 +592,17 @@ function ColesStep({ householdId, item }: { householdId: string; item: Item }) {
             <Button type="submit" variant="outline" disabled={save.isPending}>
               Remember
             </Button>
-            {picking && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="px-2"
-                onClick={() => {
-                  setPicking(false)
-                  setInvalid(false)
-                }}
-              >
-                Cancel
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              className="px-2"
+              onClick={() => {
+                setPicking(false)
+                setInvalid(false)
+              }}
+            >
+              Cancel
+            </Button>
           </div>
         </form>
       )}

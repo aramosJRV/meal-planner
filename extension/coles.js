@@ -1,11 +1,12 @@
 // Runs on coles.com.au pages. Does nothing unless background.js has a trolley fill for this
-// tab. Then, on each remembered product's page, it presses Coles's own Add button, like the
-// shopper would, waits for Coles to confirm, and moves on at a human pace.
+// tab. Then, on each remembered product's page, or on the Coles search for an item with no
+// remembered product, it presses Coles's own Add button, like the shopper would, waits for
+// Coles to confirm, and moves on at a human pace.
 // Coles can change its site at any time: anything unexpected stops the fill, never guesses.
-const ADD = '[data-testid="product-buy"] [data-testid="add-to-cart-button"]'
-const IN_TROLLEY = '[data-testid="product-buy"] [data-testid="quantity-input"]'
+const ADD = '[data-testid="add-to-cart-button"]'
+const IN_TROLLEY = '[data-testid="quantity-input"]'
 // Shown instead of Add when the product is currently unavailable.
-const UNAVAILABLE = '[data-testid="product-buy"] [data-testid="shop-alts-btn"]'
+const UNAVAILABLE = '[data-testid="shop-alts-btn"]'
 const WAIT_MS = 15000
 const SETTLE_MS = 2500
 const PAUSE_MS = [2000, 4000]
@@ -29,8 +30,11 @@ const challenged = () =>
     'iframe[src*="incapsula" i], iframe[src*="captcha" i], [id*="captcha" i]',
   )
 
+const productPage = () => document.querySelector('[data-testid="product-buy"]')
+
 // 'added' | 'already' | 'failed' (this product only) | 'stop' (stop everything)
-async function addHere(job) {
+// box finds the part of the page with this product's buttons; Coles can redraw it at any time.
+async function addHere(job, box = productPage) {
   if (challenged()) return 'stop'
   // Coles loads the trolley only once its page has focus. Before that, Add presses are ignored
   // and products already in the trolley still show Add, so wait for the shopper, then settle.
@@ -42,19 +46,60 @@ async function addHere(job) {
   await sleep(SETTLE_MS)
   // A sold-out or missing product shows no Add button: that product fails. If Coles changed
   // its page, every product fails and background.js stops after a few in a row.
-  const ready = await waitFor(() => document.querySelector(`${ADD}, ${IN_TROLLEY}, ${UNAVAILABLE}`))
+  const find = (what) => box()?.querySelector(what)
+  const ready = await waitFor(() => find(`${ADD}, ${IN_TROLLEY}, ${UNAVAILABLE}`))
   if (challenged()) return 'stop'
-  if (!ready || document.querySelector(UNAVAILABLE)) return 'failed'
-  if (document.querySelector(IN_TROLLEY)) return 'already'
+  if (!ready || find(UNAVAILABLE)) return 'failed'
+  if (find(IN_TROLLEY)) return 'already'
   // The shopper may have pressed Stop while we waited.
   if ((await send({ type: 'job' }))?.status !== 'running') return 'stop'
   // shortcut: always 1 of each product; the shopper changes amounts in the trolley. Upgrade
   // when the list can say how many packs it needs.
-  document.querySelector(ADD).click()
+  find(ADD).click()
   // Coles swaps the Add button for a quantity box once the trolley has it.
-  if (await waitFor(() => document.querySelector(IN_TROLLEY))) return 'added'
+  if (await waitFor(() => find(IN_TROLLEY))) return 'added'
   return challenged() ? 'stop' : 'failed'
 }
+
+// The search results Coles put in the page, cut down to what's needed to choose. Untrusted:
+// background.js does the choosing. null means the page isn't what we know (Coles changed it).
+function searchResults() {
+  try {
+    const { results } = JSON.parse(document.getElementById('__NEXT_DATA__').textContent).props
+      .pageProps.searchResults
+    return results.map(({ _type, id, adId, availability, brand, name, size }) => ({
+      _type,
+      id,
+      adId,
+      availability,
+      brand,
+      name,
+      size,
+    }))
+  } catch {
+    return null
+  }
+}
+
+// On the search page for an item: adds the best match, if Coles has one.
+async function pickHere(job) {
+  if (challenged()) return 'stop'
+  const results = searchResults()
+  if (!results) return 'failed'
+  const pick = await send({ type: 'pick', results })
+  if (!pick) return 'none'
+  return addHere(job, () =>
+    [...document.querySelectorAll('[data-testid="product-tile"]')].find((tile) =>
+      tile.querySelector(`a[href$="-${pick.product_id}"]`),
+    ),
+  )
+}
+
+const onItsPage = (item) =>
+  item.search
+    ? location.pathname === '/search/products' &&
+      new URLSearchParams(location.search).get('q') === item.name
+    : location.pathname.endsWith(`-${item.product_id}`)
 
 async function run() {
   let job = await send({ type: 'job' })
@@ -63,12 +108,15 @@ async function run() {
   if (job.status !== 'running') return
   if (challenged()) return show(await send({ type: 'result', result: 'stop' }))
   const item = job.products[job.at]
-  if (!location.pathname.endsWith(`-${item.product_id}`)) {
-    // Coles sent us somewhere else for this product (it may be gone).
+  if (!onItsPage(item)) {
+    // Coles sent us somewhere else for this item (the product may be gone).
     if (job.opened === job.at) job = await send({ type: 'result', result: 'failed' })
     else return go(job)
   } else {
-    job = await send({ type: 'result', result: await addHere(job) })
+    job = await send({
+      type: 'result',
+      result: await (item.search ? pickHere(job) : addHere(job)),
+    })
   }
   show(job)
   if (job?.status !== 'running') return
@@ -110,16 +158,16 @@ function show(job, needsFocus = false) {
     if (!items.length) return
     el('h3', `${title} (${items.length})`)
     const ul = el('ul')
-    for (const { name, url, note } of items) {
-      const li = el('li', '', ul)
+    for (const { lead, name, url, note } of items) {
+      const li = el('li', lead, ul)
       if (url) Object.assign(el('a', name, li), { href: url, target: '_blank', rel: 'noopener' })
-      else li.textContent = name
+      else li.append(name)
       if (note) li.append(` – ${note}`)
     }
   }
 
   el('h2', 'Filling your Coles trolley')
-  const { products, results, missing } = job
+  const { products, results, picks } = job
   if (job.status === 'running') {
     el('p', `Adding ${job.at + 1} of ${products.length}: ${products[job.at].name}…`).setAttribute(
       'role',
@@ -136,20 +184,34 @@ function show(job, needsFocus = false) {
     const status = el('p', job.status === 'done' ? 'Done.' : `Stopped. ${job.reason}`)
     status.setAttribute('role', 'status')
     if (job.status !== 'done') status.className = 'warn'
-    el('p', 'Now open your trolley and remove anything you already have at home.')
+    el(
+      'p',
+      'Now open your trolley, swap any product that isn’t right and remove anything you already have at home.',
+    )
+    const inTrolley = (i) => results[i] === 'added' || results[i] === 'already'
+    const note = (i) => (results[i] === 'already' ? 'was already in the trolley' : undefined)
+    const picked = products.flatMap((p, i) =>
+      inTrolley(i) && picks[i]
+        ? [{ lead: `${p.name} → `, name: picks[i].title, url: picks[i].url, note: note(i) }]
+        : [],
+    )
     const added = products.flatMap((p, i) =>
-      results[i] === 'added'
-        ? [{ name: p.name }]
-        : results[i] === 'already'
-          ? [{ name: p.name, note: 'was already in the trolley' }]
-          : [],
+      inTrolley(i) && !picks[i] ? [{ name: p.name, note: note(i) }] : [],
     )
     const notAdded = products.flatMap((p, i) =>
-      results[i] === 'added' || results[i] === 'already' ? [] : [{ name: p.name, url: p.url }],
+      inTrolley(i)
+        ? []
+        : [
+            {
+              name: p.name,
+              url: p.url,
+              note: results[i] === 'none' ? 'no match on Coles' : undefined,
+            },
+          ],
     )
+    list('Picked for you – check these', picked)
     list('Added', added)
     list('Not added – add these yourself', notAdded)
-    list('No product remembered – search Coles for these', missing)
     el('button', 'Close').onclick = async () => show(await send({ type: 'clear' }))
   }
   document.documentElement.append(host)

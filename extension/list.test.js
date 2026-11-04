@@ -1,4 +1,4 @@
-import { MAX_ITEMS, parseList, productUrl, searchUrl } from './list.js'
+import { MAX_ITEMS, parseList, pickBest, productUrl, searchUrl } from './list.js'
 
 const milk = { product_id: '8150288', slug: 'coles-full-cream-milk-2l', name: 'Milk' }
 
@@ -39,4 +39,51 @@ it('builds Coles links', () => {
   expect(searchUrl('Salt & pepper')).toBe(
     'https://www.coles.com.au/search/products?q=Salt%20%26%20pepper',
   )
+})
+
+describe('pickBest', () => {
+  const hit = {
+    _type: 'PRODUCT',
+    id: 4803991,
+    adId: null,
+    availability: true,
+    brand: 'Coles',
+    name: 'Brown Onions',
+    size: '1kg',
+  }
+
+  it('skips banners, extras, ads and sold-out products', () =>
+    expect(
+      pickBest([
+        { _type: 'SINGLE_TILE', adId: 'banner' },
+        { ...hit, id: 1, _type: 'PRODUCT_ASSOCIATION' },
+        { ...hit, id: 2, adId: 'display_abc' },
+        { ...hit, id: 3, availability: false },
+        hit,
+        { ...hit, id: 5 },
+      ]),
+    ).toEqual({
+      product_id: '4803991',
+      slug: 'coles-brown-onions-1kg',
+      title: 'Coles Brown Onions 1kg',
+    }))
+
+  it('makes a slug the app and database accept from any name', () =>
+    expect(
+      pickBest([{ ...hit, brand: "I'm", name: 'Perfect  Onions', size: 'approx. 1.5kg' }])?.slug,
+    ).toBe('i-m-perfect-onions-approx-1-5kg'))
+
+  it('copes with a product that has no brand', () =>
+    expect(pickBest([{ ...hit, brand: null }])?.title).toBe('Brown Onions 1kg'))
+
+  it.each([
+    [[]],
+    [null],
+    ['results'],
+    [[{ ...hit, id: '1/../checkout' }]],
+    [[{ ...hit, id: undefined }]],
+    [[{ ...hit, name: 'x'.repeat(201) }]],
+    [[{ ...hit, brand: '', name: '!!!', size: '' }]],
+    [[null]],
+  ])('finds nothing usable in %j', (results) => expect(pickBest(results)).toBeNull())
 })

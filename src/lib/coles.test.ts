@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { colesProductUrl, colesSearch, parseColesProductUrl } from './coles'
+import { canonicalName } from './ingredientLine'
+import { colesProductUrl, colesSearch, parseColesProductUrl, pickedProducts } from './coles'
 
 describe('parseColesProductUrl', () => {
   it('reads a product link', () => {
@@ -45,3 +46,33 @@ it('searches Coles by item name', () =>
   expect(colesSearch('Dishwasher tablets & salt')).toBe(
     'https://www.coles.com.au/search/products?q=Dishwasher%20tablets%20%26%20salt',
   ))
+
+describe('pickedProducts', () => {
+  const pick = {
+    name: 'Brown Onions',
+    product_id: '4803991',
+    slug: 'coles-brown-onions-1kg',
+    product_name: ' Coles Brown Onions 1kg ',
+  }
+
+  it('makes a table row from each good pick', () =>
+    expect(pickedProducts([pick])).toEqual([
+      {
+        canonical_name: canonicalName('Brown Onions'),
+        product_id: '4803991',
+        slug: 'coles-brown-onions-1kg',
+        product_name: 'Coles Brown Onions 1kg',
+      },
+    ]))
+
+  it.each([
+    ['not a list', 'picks'],
+    ['a bad id', [{ ...pick, product_id: '1/../2' }]],
+    ['a bad slug', [{ ...pick, slug: 'a/b' }]],
+    ['no item name', [{ ...pick, name: '  ' }]],
+    ['a long item name', [{ ...pick, name: 'x'.repeat(101) }]],
+    ['a long product name', [{ ...pick, product_name: 'x'.repeat(201) }]],
+    ['no product name', [{ ...pick, product_name: 3 }]],
+    ['a null', [null]],
+  ])('drops %s', (_, input) => expect(pickedProducts(input)).toEqual([]))
+})
