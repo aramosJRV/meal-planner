@@ -1,9 +1,11 @@
 // Keeps the one trolley fill that's running (or just finished) and hands it to coles.js in
 // the Coles tab it opened. Nothing here signs in to anything or talks to Coles itself.
-import { parseList, productUrl, searchUrl } from './list.js'
+import { knownResults, parseList, pickBest, productUrl, searchUrl } from './list.js'
 
 const APP = 'https://jrv-meal-planner.netlify.app'
-const RESULTS = ['added', 'already', 'failed', 'stop']
+// 'none': Coles had nothing usable for that item, which says nothing about Coles's website.
+const RESULTS = ['added', 'already', 'failed', 'none', 'stop']
+const IN_TROLLEY = ['added', 'already']
 const FAILS_IN_A_ROW = 3
 
 const load = async () => (await chrome.storage.local.get('job')).job ?? null
@@ -26,17 +28,20 @@ async function handle(msg, sender) {
     if (sender.origin !== APP) return { error: 'Not from Meal Planner.' }
     const list = parseList(msg.list)
     if (!list) return { error: "The add-on couldn't read that list. Please refresh and try again." }
-    if (!list.products.length) return { error: 'No remembered Coles products to add.' }
+    if (!list.products.length && !list.missing.length) return { error: 'Nothing to add.' }
     // Links are made here: coles.js is a plain content script and can't import list.js.
-    const products = list.products.map((p) => ({ ...p, url: productUrl(p) }))
-    const missing = list.missing.map((name) => ({ name, url: searchUrl(name) }))
+    const products = [
+      ...list.products.map((p) => ({ ...p, url: productUrl(p) })),
+      ...list.missing.map((name) => ({ name, url: searchUrl(name), search: true })),
+    ]
     // A new fill replaces any earlier one; its tab just stops getting work. The job is saved
     // before Coles loads in the new tab, so coles.js always finds it.
     const tab = await chrome.tabs.create({ url: 'about:blank' })
     await save({
       tabId: tab.id,
+      appTabId: sender.tab?.id,
       products,
-      missing,
+      picks: {},
       at: 0,
       opened: 0,
       results: [],
@@ -54,8 +59,25 @@ async function handle(msg, sender) {
     case 'opened':
       job.opened = job.at
       break
+    case 'pick': {
+      if (job.status !== 'running') return { result: 'stop' }
+      const pick = pickBest(msg.results, msg.bought)
+      if (!pick) return { result: knownResults(msg.results) ? 'none' : 'failed' }
+      job.picks[job.at] = { ...pick, url: productUrl(pick) }
+      await save(job)
+      return { pick }
+    }
     case 'result':
-      if (job.status !== 'running' || !RESULTS.includes(msg.result)) return job
+      if (!RESULTS.includes(msg.result)) return job
+      if (job.status !== 'running') {
+        // Stop can land while Coles confirms an Add already pressed: that item is in the trolley.
+        if (job.at !== job.stoppedAt || !IN_TROLLEY.includes(msg.result)) return job
+        job.results.push(msg.result)
+        job.at++
+        delete job.stoppedAt
+        job.remembered = false
+        break
+      }
       if (msg.result === 'stop') {
         job.status = 'stopped'
         job.reason =
@@ -75,6 +97,7 @@ async function handle(msg, sender) {
       if (job.status !== 'running') return job
       job.status = 'stopped'
       job.reason = 'You stopped it.'
+      job.stoppedAt = job.at
       break
     case 'clear':
       await chrome.storage.local.remove('job')
@@ -82,6 +105,24 @@ async function handle(msg, sender) {
     default:
       return job
   }
+  if (job.status !== 'running' && !job.remembered) {
+    job.remembered = true
+    remember(job)
+  }
   await save(job)
   return job
+}
+
+// Hands the Bought before picks to the Meal Planner tab, which is signed in and saves them so
+// next week uses the same products. Best guesses aren't saved: a wrong one mustn't stick. If that
+// tab has gone, they're just picked again next time.
+function remember(job) {
+  const picks = job.products.flatMap((p, i) => {
+    const pick = job.picks[i]
+    if (!pick?.bought || !IN_TROLLEY.includes(job.results[i])) return []
+    const { product_id, slug, title } = pick
+    return [{ name: p.name, product_id, slug, product_name: title }]
+  })
+  if (picks.length && job.appTabId)
+    chrome.tabs.sendMessage(job.appTabId, { type: 'picks', picks }).catch(() => {})
 }

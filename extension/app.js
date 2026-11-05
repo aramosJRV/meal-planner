@@ -1,5 +1,6 @@
 // Runs on the Meal Planner web app. The page can only hand over a shopping list; background.js
-// checks it before anything happens. Marks the page so the app shows "Fill my Coles trolley".
+// checks it before anything happens. Marks the page so the app shows "Fill my Coles trolley",
+// and passes back the products picked on Coles for the signed-in app to remember.
 window.addEventListener('message', async (e) => {
   if (e.source !== window || e.origin !== location.origin) return
   if (e.data?.type !== 'meal-planner:fill-coles-trolley') return
@@ -15,5 +16,10 @@ window.addEventListener('message', async (e) => {
   )
 })
 
-// After the listener, so a hiccup here can't leave a button that does nothing.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === 'picks')
+    window.postMessage({ type: 'meal-planner:coles-picks', picks: msg.picks }, location.origin)
+})
+
+// After the listeners, so a hiccup here can't leave a button that does nothing.
 document.documentElement.dataset.colesTrolleyAddon = '1'

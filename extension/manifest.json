@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Meal Planner: fill my Coles trolley",
-  "version": "1.0.0",
-  "description": "Adds the remembered Coles products from your Meal Planner shopping list to your own Coles trolley.",
+  "version": "1.2.0",
+  "description": "Adds your Meal Planner shopping list to your own Coles trolley.",
   "permissions": ["storage"],
   "background": { "service_worker": "background.js", "type": "module" },
   "content_scripts": [

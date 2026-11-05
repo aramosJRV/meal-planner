@@ -293,6 +293,7 @@ test('Shop at Coles: remember a product, then its links open that product', asyn
   const shop = page.getByRole('region', { name: 'Shop at Coles' })
   const paste = shop.getByLabel('Remember the product for next time')
   await page.getByRole('button', { name: 'Shop at Coles' }).click()
+  await shop.getByRole('button', { name: 'Choose a product' }).click()
   await paste.fill('https://www.coles.com.au/search/products?q=Milk')
   await shop.getByRole('button', { name: 'Remember' }).click()
   await expect(shop.getByRole('alert')).toContainText("isn't a Coles product link")
@@ -325,7 +326,7 @@ test('Shop at Coles: remember a product, then its links open that product', asyn
   ).toBeVisible()
 })
 
-test('Fill my Coles trolley hands the add-on the unticked items, remembered products first', async ({
+test('Fill my Coles trolley hands over the unticked items and remembers what it picks', async ({
   page,
 }) => {
   await newHousehold(page, 'grocery-coles-addon')
@@ -344,6 +345,7 @@ test('Fill my Coles trolley hands the add-on the unticked items, remembered prod
   ]) {
     await expect(shop.getByText(name, { exact: true })).toBeVisible()
     if (link !== 'skip') {
+      await shop.getByRole('button', { name: 'Choose a product' }).click()
       await shop
         .getByLabel('Remember the product for next time')
         .fill(`https://www.coles.com.au/product/${link}`)
@@ -377,4 +379,33 @@ test('Fill my Coles trolley hands the add-on the unticked items, remembered prod
     products: [{ product_id: '8150288', slug: 'coles-full-cream-milk-2l', name: 'Milk' }],
     missing: ['Bread'],
   })
+
+  // The add-on's picks are remembered for next time, but never replace a household's own choice.
+  await page.evaluate(`window.postMessage({ type: 'meal-planner:coles-picks', picks: [
+    { name: 'Bread', product_id: '123', slug: 'coles-white-bread-650g', product_name: 'Coles White Bread 650g' },
+    { name: 'Milk', product_id: '456', slug: 'other-milk-1l', product_name: 'Other Milk 1L' },
+    { name: 'Bad', product_id: '../checkout', slug: 'x', product_name: 'Bad' },
+  ] }, location.origin)`)
+  await expect(
+    item(page, 'Bread').getByRole('link', { name: /Open Coles White Bread 650g on Coles/ }),
+  ).toHaveAttribute('href', 'https://www.coles.com.au/product/coles-white-bread-650g-123')
+  await expect(
+    item(page, 'Milk').getByRole('link', { name: /Open Coles Full Cream/ }),
+  ).toBeVisible()
+})
+
+test('Fill my Coles trolley shows with no remembered products', async ({ page }) => {
+  await newHousehold(page, 'grocery-coles-addon-none')
+  await page.addInitScript(`
+    document.addEventListener('readystatechange', () => {
+      document.documentElement.dataset.colesTrolleyAddon = '1'
+    }, { once: true })
+  `)
+  await page.goto(`/#/list/${WEEK}`)
+  await page.reload()
+  await expect(page.getByLabel('Add an item')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Fill my Coles trolley' })).toHaveCount(0)
+  await page.getByLabel('Add an item').fill('Milk')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect(page.getByRole('button', { name: 'Fill my Coles trolley' })).toBeVisible()
 })

@@ -8,6 +8,7 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const text = (v) => (typeof v === 'string' && v.trim() && v.length <= MAX_TEXT ? v.trim() : null)
 
 // { products: [{ product_id, slug, name }], missing: [name] } → the same, cleaned, or null.
+// products have a remembered Coles product; missing are searched for on Coles.
 export function parseList(input) {
   if (!input || typeof input !== 'object') return null
   const { products, missing } = input
@@ -36,3 +37,43 @@ export const productUrl = (p) => `https://www.coles.com.au/product/${p.slug}-${p
 
 export const searchUrl = (name) =>
   `https://www.coles.com.au/search/products?q=${encodeURIComponent(name)}`
+
+// Whether search results look the way we know: none at all, or products we can read. If not,
+// Coles has changed its page, which must not pass for "no match".
+export const knownResults = (results) =>
+  Array.isArray(results) &&
+  (!results.length ||
+    results.some(
+      (r) => r?._type === 'PRODUCT' && typeof r.availability === 'boolean' && ID.test(String(r.id)),
+    ))
+
+// A real, in-stock product from a Coles search page, as { product_id, slug, title }. Results are
+// read from Coles, so they're untrusted. The slug is made from the name: Coles redirects any slug
+// to the product's current page, and the id is what counts.
+function usable(r) {
+  if (r?._type !== 'PRODUCT' || r.availability !== true) return null
+  const product_id = String(r.id)
+  const title = text([r.brand, r.name, r.size].filter((v) => typeof v === 'string').join(' '))
+  if (!ID.test(product_id) || !title) return null
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return slug ? { product_id, slug, title } : null
+}
+
+// The best match on a Coles search page: the first product the shopper has bought before (bought
+// is a list of product ids; an ad counts here, she chose it herself), otherwise the first that
+// isn't a banner, a "Goes well together" extra or a sponsored ad.
+export function pickBest(results, bought = []) {
+  if (!Array.isArray(results)) return null
+  const known = new Set(Array.isArray(bought) ? bought : [])
+  let guess = null
+  for (const r of results) {
+    const product = usable(r)
+    if (!product) continue
+    if (known.has(product.product_id)) return { ...product, bought: true }
+    if (!guess && !r.adId) guess = { ...product, bought: false }
+  }
+  return guess
+}
