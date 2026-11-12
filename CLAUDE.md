@@ -31,6 +31,7 @@ Do not introduce Lovable, Ionic, Redux, or another state/data library without as
 - **Stop conditions** (any one ends the loop and reports): acceptance criteria met and PR merged per rule 1 · a migration is needed · a release action is needed · same failure 3 times in a row · 20 iterations without progress · anything ambiguous in DESIGN.md.
 - Use git worktrees for parallel loops; never two loops on the same branch.
 - End-of-loop report: what changed, PR link, tests run, what's still open.
+- When a PR merges or is abandoned, remove its worktree (`git worktree remove <path>`) and delete the branch. Stale worktrees keep old copies of this file.
 
 ## Recommended tooling
 - Ponytail plugin (minimal code). Pair with a normal code review; it skips security/correctness.
