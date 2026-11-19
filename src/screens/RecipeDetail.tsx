@@ -4,7 +4,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 import { formatQuantity, scale, toDisplay, unitLabel } from '@/lib/units'
-import { go, type Recipe, useRecipe } from './recipeData'
+import { go, type Recipe, usePhotoUrls, useRecipe } from './recipeData'
 import Screen from './Screen'
 
 // At the recipe's own servings show the line as written; otherwise rebuild it scaled.
@@ -42,6 +42,7 @@ export default function RecipeDetail({ id, householdId }: { id: string; househol
 function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }) {
   const queryClient = useQueryClient()
   const [servings, setServings] = useState(recipe.base_servings)
+  const photo = usePhotoUrls([recipe.image_path])?.[recipe.image_path ?? '']
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['recipe', recipe.id] })
     queryClient.invalidateQueries({ queryKey: ['recipes', householdId] })
@@ -104,6 +105,13 @@ function Detail({ recipe, householdId }: { recipe: Recipe; householdId: string }
         </p>
       )}
 
+      {photo && (
+        <img
+          src={photo}
+          alt={recipe.title}
+          className="aspect-[4/3] max-h-[28rem] w-full object-cover lg:aspect-[21/9]"
+        />
+      )}
       {recipe.description && (
         <p className="text-muted-foreground font-serif text-xl leading-snug italic lg:max-w-3xl">
           {recipe.description}

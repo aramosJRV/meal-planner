@@ -21,7 +21,7 @@ export type Entry = {
   locked: boolean
   leftover_of: string | null
   reason: string | null
-  recipes: { title: string }
+  recipes: { title: string; image_path: string | null }
 }
 
 export const local = (date: string) => new Date(`${date}T00:00:00`)
@@ -48,7 +48,7 @@ export function useWeek(householdId: string, weekStart: string) {
       const { data, error } = await supabase
         .from('meal_plan_entries')
         .select(
-          'id, date, slot, recipe_id, servings, locked, leftover_of, reason, recipes(title), meal_plans!inner(week_start)',
+          'id, date, slot, recipe_id, servings, locked, leftover_of, reason, recipes(title, image_path), meal_plans!inner(week_start)',
         )
         .eq('household_id', householdId)
         .eq('meal_plans.week_start', weekStart)

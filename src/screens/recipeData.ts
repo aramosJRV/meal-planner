@@ -18,6 +18,9 @@ export type Draft = {
   notes: string | null
   source_type: 'manual' | 'url' | 'instagram'
   source_url: string | null
+  image_path: string | null
+  // A photo not uploaded yet (from an import); the form uploads it on save.
+  photo?: Blob
 }
 
 export const emptyDraft: Draft = {
@@ -33,6 +36,7 @@ export const emptyDraft: Draft = {
   notes: null,
   source_type: 'manual',
   source_url: null,
+  image_path: null,
 }
 
 export type Recipe = {
@@ -48,6 +52,7 @@ export type Recipe = {
   source_url: string | null
   is_favourite: boolean
   notes: string | null
+  image_path: string | null
   recipe_ingredients: {
     id: string
     quantity: number | null
@@ -70,7 +75,7 @@ export function useRecipes(householdId: string) {
       const { data, error } = await supabase
         .from('recipes')
         .select(
-          'id, title, cuisine, meal_types, is_favourite, prep_minutes, cook_minutes, base_servings',
+          'id, title, cuisine, meal_types, is_favourite, prep_minutes, cook_minutes, base_servings, image_path',
         )
         .eq('household_id', householdId)
         .order('title')
@@ -112,8 +117,11 @@ const lines = (text: string) =>
 export function useSaveRecipe(householdId: string, recipeId?: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ lines: prepared, ...draft }: Draft & { lines?: Line[] }) => {
-      const { ingredients, steps, ...recipe } = draft
+    mutationFn: async ({
+      lines: prepared,
+      ...draft
+    }: Omit<Draft, 'photo'> & { lines?: Line[] }) => {
+      const { ingredients, steps, image_path, ...recipe } = draft
       const { data, error } = await supabase.rpc('save_recipe', {
         p_household_id: householdId,
         p_recipe_id: recipeId ?? null,
@@ -125,11 +133,37 @@ export function useSaveRecipe(householdId: string, recipeId?: string) {
         console.error('save_recipe', error)
         throw error
       }
-      return data as string
+      const id = data as string
+      // shortcut: the photo is set after save_recipe, not inside it (that needs a migration).
+      // A failure here keeps the saved recipe without its photo, rather than erroring and
+      // inviting a second save that would duplicate a new recipe.
+      // shortcut: a replaced, removed or deleted recipe's photo file stays in storage (no delete
+      // rule on recipe-media yet); add one with a migration if storage use grows.
+      const photo = await supabase.from('recipes').update({ image_path }).eq('id', id)
+      if (photo.error) console.error('set recipe photo', photo.error)
+      return id
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ['recipes', householdId] })
       queryClient.invalidateQueries({ queryKey: ['recipe', id] })
     },
   })
+}
+
+// Photos are private (household-only), so the browser gets short-lived signed links.
+// Not saved for offline use: the links expire. shortcut: photos don't show offline.
+export function usePhotoUrls(paths: (string | null | undefined)[]) {
+  const wanted = [...new Set(paths.filter((p): p is string => !!p))].sort()
+  return useQuery({
+    queryKey: ['photo-urls', wanted],
+    enabled: wanted.length > 0,
+    staleTime: 6 * 60 * 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase.storage
+        .from('recipe-media')
+        .createSignedUrls(wanted, 24 * 60 * 60)
+      if (error) throw error
+      return Object.fromEntries(data.map((d) => [d.path, d.signedUrl])) as Record<string, string>
+    },
+  }).data
 }
