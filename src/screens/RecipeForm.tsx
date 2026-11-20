@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { applyMatches, type Hint, type Match, readLines } from '@/lib/importLines'
+import { uploadJpeg } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
-import { type Draft, go, MEAL_TYPES, useSaveRecipe } from './recipeData'
+import { type Draft, go, MEAL_TYPES, usePhotoUrls, useSaveRecipe } from './recipeData'
 
 const textarea =
   'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-base outline-none focus-visible:ring-[3px] md:text-sm'
@@ -60,6 +61,14 @@ export default function RecipeForm({
   const [checking, setChecking] = useState(false)
   // The planner only suggests a recipe for the meals it suits, so at least one is needed.
   const [noMealType, setNoMealType] = useState(false)
+  // A new photo waits here until save; `kept` is the stored one (null once removed).
+  const [photo, setPhoto] = useState<Blob | null>(initial.photo ?? null)
+  const [kept, setKept] = useState(initial.image_path)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const newPreview = useMemo(() => photo && URL.createObjectURL(photo), [photo])
+  useEffect(() => () => void (newPreview && URL.revokeObjectURL(newPreview)), [newPreview])
+  const keptPreview = usePhotoUrls([kept])?.[kept ?? '']
+  const preview = newPreview ?? (kept ? keptPreview : null)
   const text = (f: FormData, k: string) => (f.get(k) as string).trim() || null
   const num = (f: FormData, k: string) => (f.get(k) === '' ? null : Number(f.get(k)))
 
@@ -88,8 +97,23 @@ export default function RecipeForm({
             return setMatchError(true)
           }
         }
+        let image_path = kept
+        if (photo) {
+          setPhotoError(null)
+          setChecking(true)
+          try {
+            image_path = await uploadJpeg(householdId, 'recipes', photo)
+          } catch (err) {
+            setChecking(false)
+            return setPhotoError((err as Error).message)
+          }
+          // A retry after a failed save reuses this upload.
+          setKept(image_path)
+          setPhoto(null)
+        }
         save.mutate(
           {
+            image_path,
             // Review: save with the AI reading and the matches shown (unmatched → new ingredient).
             lines: hints && applyMatches(readLines(ingredients, hints), found),
             title: (f.get('title') as string).trim(),
@@ -129,6 +153,42 @@ export default function RecipeForm({
         <div className="flex flex-col gap-2">
           <Label htmlFor="title">Title</Label>
           <Input id="title" name="title" defaultValue={initial.title} maxLength={200} required />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="photo">Photo</Label>
+          {preview && (
+            <img src={preview} alt="Recipe photo" className="aspect-[4/3] w-full object-cover" />
+          )}
+          <div className="flex items-center gap-2">
+            <Input
+              id="photo"
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) setPhoto(file)
+                e.target.value = ''
+              }}
+            />
+            {(photo || kept) && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setPhoto(null)
+                  setKept(null)
+                }}
+              >
+                Remove photo
+              </Button>
+            )}
+          </div>
+          {photoError && (
+            <p role="alert" className="text-destructive text-sm">
+              {photoError}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-3">

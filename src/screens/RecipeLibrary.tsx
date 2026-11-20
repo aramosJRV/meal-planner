@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MEAL_TYPES, useRecipes } from './recipeData'
+import { MEAL_TYPES, usePhotoUrls, useRecipes } from './recipeData'
 import Screen from './Screen'
 
 const select =
@@ -15,6 +15,7 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
   const [favourites, setFavourites] = useState(false)
 
   const all = recipes.data ?? []
+  const photos = usePhotoUrls(all.map((r) => r.image_path))
   const cuisines = [...new Set(all.map((r) => r.cuisine).filter(Boolean))].sort() as string[]
   const shown = all.filter(
     (r) =>
@@ -100,18 +101,39 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
           const minutes = (r.prep_minutes ?? 0) + (r.cook_minutes ?? 0)
           return (
             <li key={r.id} className="lg:border-b">
-              <a href={`#/recipes/${r.id}`} className="flex flex-col py-3 hover:underline">
-                <span className="font-serif text-2xl leading-tight">
-                  {r.title}
-                  {r.is_favourite && (
-                    <span aria-label="favourite" className="text-highlight">
-                      {' '}
-                      ★
-                    </span>
-                  )}
-                </span>
-                <span className="text-muted-foreground text-sm">
-                  {[r.cuisine, minutes ? `${minutes} min` : null].filter(Boolean).join(' · ')}
+              {/* Photo beside the title on phone; above it on wide screens. */}
+              <a
+                href={`#/recipes/${r.id}`}
+                className="group flex items-center gap-4 py-3 lg:flex-col lg:items-stretch lg:gap-3 lg:pt-6"
+              >
+                {r.image_path && photos?.[r.image_path] ? (
+                  <img
+                    src={photos[r.image_path]}
+                    alt=""
+                    loading="lazy"
+                    className="size-20 shrink-0 object-cover lg:aspect-[4/3] lg:size-auto lg:w-full"
+                  />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="bg-muted text-muted-foreground flex size-20 shrink-0 items-center justify-center font-serif text-4xl italic lg:aspect-[4/3] lg:size-auto lg:w-full lg:text-6xl"
+                  >
+                    {r.title.trim()[0]}
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-col">
+                  <span className="font-serif text-2xl leading-tight group-hover:underline">
+                    {r.title}
+                    {r.is_favourite && (
+                      <span aria-label="favourite" className="text-highlight">
+                        {' '}
+                        ★
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground text-sm">
+                    {[r.cuisine, minutes ? `${minutes} min` : null].filter(Boolean).join(' · ')}
+                  </span>
                 </span>
               </a>
             </li>

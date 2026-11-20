@@ -105,13 +105,43 @@ export async function checkUrl(url: URL, resolve: Resolve): Promise<string | nul
 export type Limits = { maxBytes: number; timeoutMs: number; maxRedirects: number }
 export const LIMITS: Limits = { maxBytes: 2_000_000, timeoutMs: 10_000, maxRedirects: 5 }
 
-// shortcut: the address is checked, then fetch resolves the name again, so a DNS-rebinding
-// host could switch to a private address in between. Pin the IP if Deno's fetch ever allows it.
+type Want = { accept: string; type: RegExp; wrong: string }
+const PAGE: Want = { accept: 'text/html,application/xhtml+xml', type: /html/i, wrong: 'not_html' }
+// No SVG: it can carry scripts, and the app re-encodes photos to JPEG anyway.
+const PHOTO: Want = {
+  accept: 'image/jpeg,image/png,image/webp,image/gif,image/avif',
+  type: /^image\/(jpe?g|png|webp|gif|avif)\b/i,
+  wrong: 'not_image',
+}
+export const PHOTO_LIMITS: Limits = { maxBytes: 5_000_000, timeoutMs: 8_000, maxRedirects: 5 }
+
 export async function fetchPage(
   start: string,
   deps: { fetch: typeof fetch; resolve: Resolve },
   limits: Limits = LIMITS,
 ): Promise<{ url: string; html: string }> {
+  const { url, bytes } = await fetchChecked(start, deps, limits, PAGE)
+  // shortcut: assumes UTF-8; decode by the page's charset if non-UTF-8 sites turn up.
+  return { url, html: new TextDecoder().decode(bytes) }
+}
+
+// A recipe's photo, with the same address checks as the page.
+export async function fetchPhoto(
+  start: string,
+  deps: { fetch: typeof fetch; resolve: Resolve },
+  limits: Limits = PHOTO_LIMITS,
+): Promise<{ bytes: Uint8Array; type: string }> {
+  return fetchChecked(start, deps, limits, PHOTO)
+}
+
+// shortcut: the address is checked, then fetch resolves the name again, so a DNS-rebinding
+// host could switch to a private address in between. Pin the IP if Deno's fetch ever allows it.
+async function fetchChecked(
+  start: string,
+  deps: { fetch: typeof fetch; resolve: Resolve },
+  limits: Limits,
+  want: Want,
+): Promise<{ url: string; bytes: Uint8Array; type: string }> {
   let url: URL
   try {
     url = new URL(start)
@@ -129,7 +159,7 @@ export async function fetchPage(
       const res = await deps.fetch(url, {
         redirect: 'manual', // each hop is checked again above
         signal,
-        headers: { accept: 'text/html,application/xhtml+xml' },
+        headers: { accept: want.accept },
       })
       const location = res.headers.get('location')
       if (res.status >= 300 && res.status < 400 && location) {
@@ -138,9 +168,10 @@ export async function fetchPage(
         continue
       }
       if (!res.ok || !res.body) throw new ImportError('fetch_failed')
-      if (!/html/i.test(res.headers.get('content-type') ?? '')) {
+      const type = res.headers.get('content-type') ?? ''
+      if (!want.type.test(type)) {
         await res.body.cancel()
-        throw new ImportError('not_html')
+        throw new ImportError(want.wrong)
       }
       if (Number(res.headers.get('content-length')) > limits.maxBytes) {
         await res.body.cancel()
@@ -153,9 +184,7 @@ export async function fetchPage(
         if (size > limits.maxBytes) throw new ImportError('too_large')
         chunks.push(chunk)
       }
-      // shortcut: assumes UTF-8; decode by the page's charset if non-UTF-8 sites turn up.
-      const html = new TextDecoder().decode(await new Blob(chunks).arrayBuffer())
-      return { url: url.href, html }
+      return { url: url.href, bytes: new Uint8Array(await new Blob(chunks).arrayBuffer()), type }
     }
     throw new ImportError('too_many_redirects')
   }

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { fetchPage } from './guard'
-import { clean, isoMinutes, pageText, parseRecipePage } from './recipe'
+import { clean, imageUrl, isoMinutes, pageText, parseRecipePage } from './recipe'
 
 const page = (jsonld: unknown) =>
   `<html><head><script type="application/ld+json">${JSON.stringify(jsonld)}</script></head></html>`
@@ -33,7 +33,22 @@ test('reads a plain Recipe object', () => {
     ingredients: ['1 kg butternut pumpkin', '1 brown onion'],
     steps: ['Roast the pumpkin.', 'Blend.'],
     source_url: 'https://example.com/soup',
+    image_url: null,
   })
+})
+
+test('reads the photo address in any schema.org shape, web addresses only', () => {
+  const base = 'https://example.com/soup'
+  expect(imageUrl('https://cdn.example.com/a.jpg', base)).toBe('https://cdn.example.com/a.jpg')
+  expect(imageUrl(['/img/a.jpg', '/img/b.jpg'], base)).toBe('https://example.com/img/a.jpg')
+  expect(imageUrl([{ '@type': 'ImageObject', url: 'https://x.test/a.png' }], base)).toBe(
+    'https://x.test/a.png',
+  )
+  expect(imageUrl({ contentUrl: 'https://x.test/c.webp' }, base)).toBe('https://x.test/c.webp')
+  expect(imageUrl('javascript:alert(1)', base)).toBeNull()
+  expect(imageUrl('file:///etc/passwd', base)).toBeNull()
+  expect(imageUrl({ url: 42 }, base)).toBeNull()
+  expect(imageUrl(undefined, base)).toBeNull()
 })
 
 test('finds the Recipe inside @graph, arrays and multi-type nodes', () => {

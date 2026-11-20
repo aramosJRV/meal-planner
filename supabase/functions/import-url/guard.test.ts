@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { checkUrl, fetchPage, ImportError, isBlockedIp, type Limits } from './guard'
+import { checkUrl, fetchPage, fetchPhoto, ImportError, isBlockedIp, type Limits } from './guard'
 
 test.each([
   '127.0.0.1',
@@ -189,6 +189,29 @@ test('a redirect to a non-web scheme is blocked', async () => {
       headers: { location: 'file:///etc/passwd' },
     })) as typeof globalThis.fetch
   expect(await code(fetchPage('https://example.com/', { fetch, resolve: publicDns }, limits))).toBe(
+    'blocked_url',
+  )
+})
+
+test('fetches a photo, but only a real image type, with the same address checks', async () => {
+  const img = (type: string) => ({
+    fetch: (async () =>
+      new Response(new Uint8Array([1, 2, 3]), {
+        headers: { 'content-type': type },
+      })) as typeof fetch,
+    resolve: publicDns,
+  })
+  const photo = await fetchPhoto('https://cdn.example.com/a.webp', img('image/webp'), limits)
+  expect(photo).toEqual({
+    url: 'https://cdn.example.com/a.webp',
+    bytes: new Uint8Array([1, 2, 3]),
+    type: 'image/webp',
+  })
+  expect(await code(fetchPhoto('https://x.test/a.svg', img('image/svg+xml'), limits))).toBe(
+    'not_image',
+  )
+  expect(await code(fetchPhoto('https://x.test/a', img('text/html'), limits))).toBe('not_image')
+  expect(await code(fetchPhoto('http://10.0.0.1/a.jpg', img('image/jpeg'), limits))).toBe(
     'blocked_url',
   )
 })

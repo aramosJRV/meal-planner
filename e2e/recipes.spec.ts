@@ -39,6 +39,16 @@ test('add a recipe by hand, find it in the library, change servings', async ({ p
   await expect(page.getByRole('button', { name: '★ Favourite' })).toBeVisible()
 })
 
+// An 8×8 red PNG, standing in for the photo import-url fetches from the recipe page.
+const PHOTO =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGPYrCaHFTEMLQkARnA9wUDwlJ0AAAAASUVORK5CYII='
+const photoShown = (img: import('@playwright/test').Locator) =>
+  expect
+    .poll(() =>
+      img.evaluate((el) => (el as { complete: boolean; naturalWidth: number }).naturalWidth),
+    )
+    .toBeGreaterThan(0)
+
 // The real import-url fetches pages server-side and refuses local addresses (SSRF guard),
 // so here its response is built from the local test page with the real parser.
 test('add a recipe from a link, review it, save it', async ({ page }) => {
@@ -52,7 +62,7 @@ test('add a recipe from a link, review it, save it', async ({ page }) => {
         'access-control-allow-headers': '*',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ recipe: parseRecipePage(fixture, sourceUrl) }),
+      body: JSON.stringify({ recipe: parseRecipePage(fixture, sourceUrl), photo: PHOTO }),
     }),
   )
   await newHousehold(page, 'importer')
@@ -64,10 +74,13 @@ test('add a recipe from a link, review it, save it', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Check the recipe' })).toBeVisible()
   await expect(page.getByLabel('Title')).toHaveValue('Lemon herb chicken')
   await expect(page.getByLabel('Ingredients')).toHaveValue(/2 cloves garlic, crushed/)
+  await photoShown(page.getByRole('img', { name: 'Recipe photo' }))
   await page.getByLabel('Title').fill('Lemon chicken')
   await page.getByRole('button', { name: 'Save recipe' }).click()
 
   await expect(page.getByRole('heading', { name: 'Lemon chicken' })).toBeVisible()
+  // The imported photo was stored in the household's private folder and shows from there.
+  await photoShown(page.getByRole('img', { name: 'Lemon chicken' }))
   await expect(page.getByRole('link', { name: 'View original recipe' })).toHaveAttribute(
     'href',
     sourceUrl,
@@ -75,8 +88,10 @@ test('add a recipe from a link, review it, save it', async ({ page }) => {
 
   await page.getByRole('link', { name: 'Edit' }).click()
   await page.getByLabel('Serves').fill('2')
+  await page.getByRole('button', { name: 'Remove photo' }).click()
   await page.getByRole('button', { name: 'Save recipe' }).click()
   await expect(page.getByText('Serves 2')).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Lemon chicken' })).toHaveCount(0)
 
   page.once('dialog', (d) => d.accept())
   await page.getByRole('button', { name: 'Delete' }).click()

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { Hint } from '@/lib/importLines'
+import { dataUrlToBlob, uploadJpeg } from '@/lib/media'
 import { clearShare, type Shared, useShared } from '@/lib/share'
 import { supabase } from '@/lib/supabase'
 import RecipeForm from './RecipeForm'
@@ -55,37 +56,6 @@ async function call(name: string, body: object) {
     throw new Error('That took too long. Try again, or paste the recipe text instead.')
   if (error) throw new Error("Couldn't reach the server. Check your connection and try again.")
   return data
-}
-
-// Screenshots go up as JPEG no larger than Claude reads them (1568 px), to save upload and tokens.
-async function toJpeg(file: Blob): Promise<Blob> {
-  const image = await createImageBitmap(file).catch(() => {
-    throw new Error("We couldn't read one of those images. Try a screenshot instead.")
-  })
-  const scale = Math.min(1, 1568 / Math.max(image.width, image.height))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(image.width * scale)
-  canvas.height = Math.round(image.height * scale)
-  canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height)
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("We couldn't read one of those images."))),
-      'image/jpeg',
-      0.85,
-    ),
-  )
-}
-
-async function upload(householdId: string, file: File) {
-  const path = `${householdId}/imports/${crypto.randomUUID()}.jpg`
-  const { error } = await supabase.storage
-    .from('recipe-media')
-    .upload(path, await toJpeg(file), { contentType: 'image/jpeg' })
-  if (error) {
-    console.error('upload screenshot', error)
-    throw new Error("Couldn't upload a screenshot. Check your connection and try again.")
-  }
-  return path
 }
 
 type Imported = {
@@ -224,17 +194,21 @@ function ImportForm({ householdId, shared }: { householdId: string; shared: Shar
       if (!input.text && !input.files.length) {
         if (!url) throw new Error('Add a link, the recipe text or a screenshot.')
         try {
-          const { recipe } = (await call('import-url', { url })) as {
+          const { recipe, photo } = (await call('import-url', { url })) as {
             recipe: Imported & { ingredients: string[] }
+            photo: string | null
           }
-          return { draft: toDraft(recipe, recipe.ingredients, 'url') }
+          const draft = toDraft(recipe, recipe.ingredients, 'url')
+          return { draft: { ...draft, photo: photo ? dataUrlToBlob(photo) : undefined } }
         } catch (e) {
           // No recipe data on the page (e.g. Instagram, blogs): let the AI read the page text.
           if (!(e instanceof ImportFailed && e.reason === 'no_recipe' && e.body.text)) throw e
           return extract(householdId, { text: e.body.text, source_url: url })
         }
       }
-      const image_paths = await Promise.all(input.files.map((f) => upload(householdId, f)))
+      const image_paths = await Promise.all(
+        input.files.map((f) => uploadJpeg(householdId, 'imports', f)),
+      )
       return extract(householdId, { text: input.text || null, image_paths, source_url: url })
     },
     onSuccess: clearShare,

@@ -16,6 +16,7 @@ import {
 } from './planData'
 import { syncSoon } from './groceryData'
 import Screen from './Screen'
+import { usePhotoUrls } from './recipeData'
 
 const label = 'text-xs font-semibold tracking-[0.14em] uppercase'
 const action = `${label} text-muted-foreground hover:text-foreground flex min-h-11 items-center disabled:opacity-40 lg:min-h-8`
@@ -47,6 +48,7 @@ export default function ThisWeek({
     },
   })
 
+  const photos = usePhotoUrls((week.data ?? []).map((e) => e.recipes.image_path))
   const at = new Map((week.data ?? []).map((e) => [`${e.date}|${e.slot}`, e]))
   const title = weekStart === current ? 'This week' : `Week of ${shortDate(weekStart)}`
 
@@ -128,6 +130,7 @@ export default function ThisWeek({
                   source={(id) => week.data?.find((e) => e.id === id)}
                   hasLeftovers={(id) => !!week.data?.some((e) => e.leftover_of === id)}
                   loading={!week.isSuccess}
+                  photos={photos}
                 />
               ))}
             </ul>
@@ -147,6 +150,7 @@ function SlotRow(p: {
   source: (id: string) => Entry | undefined
   hasLeftovers: (id: string) => boolean
   loading: boolean
+  photos?: Record<string, string>
 }) {
   const { entry } = p
   const change = usePlanChange(p.household.id, p.weekStart, (f: () => Promise<unknown>) => f())
@@ -171,6 +175,16 @@ function SlotRow(p: {
         )
       ) : (
         <>
+          {entry.recipes.image_path && p.photos?.[entry.recipes.image_path] && (
+            <a href={`#/recipes/${entry.recipe_id}`} tabIndex={-1} aria-hidden>
+              <img
+                src={p.photos[entry.recipes.image_path]}
+                alt=""
+                loading="lazy"
+                className="aspect-[5/2] w-full object-cover lg:aspect-[4/3]"
+              />
+            </a>
+          )}
           <a
             href={`#/recipes/${entry.recipe_id}`}
             className="font-serif text-2xl leading-tight hover:underline lg:text-xl"

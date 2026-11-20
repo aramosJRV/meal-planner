@@ -11,6 +11,7 @@ export type ImportedRecipe = {
   ingredients: string[]
   steps: string[]
   source_url: string
+  image_url: string | null
 }
 
 type Node = Record<string, unknown>
@@ -130,6 +131,19 @@ function steps(v: unknown, out: string[] = [], depth = 0): string[] {
   return out.slice(0, 100)
 }
 
+// schema.org image: a URL, an ImageObject, or a list of either. Web addresses only.
+export function imageUrl(v: unknown, base: string): string | null {
+  const img = first(v)
+  const raw = img && typeof img === 'object' ? ((img as Node).url ?? (img as Node).contentUrl) : img
+  if (typeof raw !== 'string' || raw.length > 2000) return null
+  try {
+    const url = new URL(raw.trim(), base)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null
+  } catch {
+    return null
+  }
+}
+
 export function toRecipe(node: Node, sourceUrl: string): ImportedRecipe | null {
   const title = clean(node.name, 200)
   if (!title) return null
@@ -151,6 +165,7 @@ export function toRecipe(node: Node, sourceUrl: string): ImportedRecipe | null {
       .slice(0, 100),
     steps: steps(node.recipeInstructions),
     source_url: sourceUrl,
+    image_url: imageUrl(node.image, sourceUrl),
   }
 }
 
