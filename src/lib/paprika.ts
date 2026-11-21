@@ -47,7 +47,10 @@ export function minutes(s: string | undefined): number | null {
   const v = s.toLowerCase()
   const bare = v.match(/^\s*(\d+)\s*$/)
   const h = v.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)(?![a-z])/)
-  const m = v.match(/(\d+)\s*(?:minutes?|mins?|m)(?![a-z])/)
+  // "1h 30": a bare number after the hours is minutes.
+  const m =
+    v.match(/(\d+)\s*(?:minutes?|mins?|m)(?![a-z])/) ??
+    (h ? v.match(/(?:hours?|hrs?|h)\s+(\d+)\s*$/) : null)
   if (!bare && !h && !m) return null
   const total = Math.round(bare ? +bare[1] : (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0))
   return total <= 10000 ? total : null
@@ -68,16 +71,35 @@ export function mealTypes(categories: string[] = [], name = ''): string[] {
   return ['dinner']
 }
 
-// "150g/10 tbsp butter", "200g/ 7 oz chocolate": keep the first (metric) amount for parsing.
-// "450g/1lb 2oz flour" too: the second amount can have several parts.
-const ALT_AMOUNT = /^([\d½¼¾⅓⅔][\d./\s½¼¾⅓⅔]*\s*[a-z]+)\s*\/(?:\s*[\d./½¼¾⅓⅔]+\s*[a-z]+\.?)+(?=\s)/i
-export const dropAltAmount = (l: string) => l.replace(ALT_AMOUNT, '$1')
+// Unit words an amount after "/" can end in (the parser's units plus imperial ones).
+const UNIT =
+  '(?:fl\\.?\\s*oz|ounces?|oz|pounds?|lbs?|cups?|tablespoons?|tbsps?|tbs|teaspoons?|tsps?|' +
+  'kilograms?|kilos?|kgs?|grams?|gms?|g|millilit(?:re|er)s?|mls?|lit(?:re|er)s?|l|cm|inch(?:es)?|in)'
+const AMT = '[\\d½¼¾⅓⅔][\\d./\\s½¼¾⅓⅔]*'
+// "150g/10 tbsp butter", "2 cups/ 1 litre water", "450g/1lb 2oz flour": keep the first amount.
+const ALT_AMOUNT = new RegExp(
+  `^(${AMT}\\s*[a-z]+)\\s*\\/(?:\\s*[\\d./½¼¾⅓⅔]+\\s*${UNIT}\\.?){1,2}(?=\\s)`,
+  'i',
+)
+// "1 lb/450g beef", "8 oz/225 g pasta": the parser has no imperial units, so keep the metric one.
+const IMPERIAL_FIRST =
+  /^[\d½¼¾⅓⅔][\d./\s½¼¾⅓⅔]*\s*(?:lbs?|pounds?|oz|ounces?)\.?\s*\/\s*([\d.]+\s*(?:kg|g|grams?|ml|l|litres?))(?=\s)/i
+// "1 and 3/4 cups" → "1 3/4 cups"; "1 x 375g packet" → "375g packet"; "3 x sausages" → "3
+// sausages". A fraction after "x" ("2 x 1/2 cup") is left alone: "2 1/2" would misread it.
+export const tidyAmount = (l: string) =>
+  l
+    .replace(IMPERIAL_FIRST, '$1')
+    .replace(ALT_AMOUNT, '$1')
+    .replace(/^(\d+)\s+and\s+(\d+\/\d+)/i, '$1 $2')
+    .replace(/^1\s*x\s+(?=\d+(?:\.\d+)?\s*[a-z])/i, '')
+    .replace(/^(\d+)\s*x\s+(?!\d+\/|[½¼¾⅓⅔⅛])/i, '$1 ')
 
 // Section headings in the ingredients ("For the sauce:", "MARINADE") are not ingredients.
 // Lines with an amount never are. shortcut: an all-caps "SALT AND PEPPER" is dropped too;
 // the dry-run report lists every dropped line so it can be checked.
 export const isHeading = (l: string) =>
-  !/[\d½¼¾⅓⅔⅛]/.test(l) && (l.endsWith(':') || l === l.toUpperCase())
+  /^(\d+x\s*)+$/i.test(l) || // a recipe site's "1X 2X 3X" scaler
+  (!/[\d½¼¾⅓⅔⅛]/.test(l) && (l.endsWith(':') || l === l.toUpperCase()))
 
 export function toDraft(r: PaprikaRecipe): PaprikaDraft | null {
   const title = text(r.name)?.slice(0, 200)
@@ -108,7 +130,7 @@ export function toDraft(r: PaprikaRecipe): PaprikaDraft | null {
     },
     // Parsed from the cleaned line; the original is kept (the database allows 500 characters).
     lines: ingredients.map((l) => ({
-      ...readLines(dropAltAmount(l))[0],
+      ...readLines(tidyAmount(l))[0],
       raw_text: l.slice(0, 500),
     })),
     headings: all.filter(isHeading),

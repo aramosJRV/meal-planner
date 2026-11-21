@@ -1,4 +1,4 @@
-import { dropAltAmount, isHeading, mealTypes, minutes, servings, toDraft } from './paprika'
+import { tidyAmount, isHeading, mealTypes, minutes, servings, toDraft } from './paprika'
 
 test('reads Paprika times', () => {
   expect(minutes('15 mins')).toBe(15)
@@ -9,6 +9,7 @@ test('reads Paprika times', () => {
   expect(minutes('')).toBeNull()
   expect(minutes('overnight')).toBeNull()
   expect(minutes('1h30m')).toBe(90)
+  expect(minutes('1h 30')).toBe(90)
   expect(minutes('1 1/2 hours')).toBeNull()
   expect(minutes('20000')).toBeNull()
   expect(minutes('99999999999')).toBeNull()
@@ -37,16 +38,29 @@ test('spots section headings', () => {
   expect(isHeading('1 cup milk')).toBe(false)
   expect(isHeading('½ CUP SUGAR')).toBe(false)
   expect(isHeading('Juice of 1 lemon:')).toBe(false)
+  expect(isHeading('1X 2X 3X')).toBe(true)
+  expect(isHeading('2x Garlic')).toBe(false)
 })
 
-test('drops the second of two amounts', () => {
-  expect(dropAltAmount('150g/10 tbsp unsalted butter, cubed')).toBe('150g unsalted butter, cubed')
-  expect(dropAltAmount('200g/ 7 oz dark chocolate')).toBe('200g dark chocolate')
-  expect(dropAltAmount('1 1/2 cups/375ml milk')).toBe('1 1/2 cups milk')
-  expect(dropAltAmount('1 cup flour')).toBe('1 cup flour')
-  expect(dropAltAmount('½ cup/125ml milk')).toBe('½ cup milk')
-  expect(dropAltAmount('450g/1lb 2oz flour')).toBe('450g flour')
-  expect(dropAltAmount('200g/ 7 oz 70% dark chocolate')).toBe('200g 70% dark chocolate')
+test('tidies amounts before parsing', () => {
+  expect(tidyAmount('150g/10 tbsp unsalted butter, cubed')).toBe('150g unsalted butter, cubed')
+  expect(tidyAmount('200g/ 7 oz dark chocolate')).toBe('200g dark chocolate')
+  expect(tidyAmount('1 1/2 cups/375ml milk')).toBe('1 1/2 cups milk')
+  expect(tidyAmount('1 cup flour')).toBe('1 cup flour')
+  expect(tidyAmount('½ cup/125ml milk')).toBe('½ cup milk')
+  expect(tidyAmount('450g/1lb 2oz flour')).toBe('450g flour')
+  expect(tidyAmount('800g/28oz 2 cans tomatoes')).toBe('800g 2 cans tomatoes')
+  expect(tidyAmount('1 and 3/4 cups flour')).toBe('1 3/4 cups flour')
+  expect(tidyAmount('1 x 375g packet pancake mix')).toBe('375g packet pancake mix')
+  expect(tidyAmount('3 x Italian Sausage')).toBe('3 Italian Sausage')
+  expect(tidyAmount('1 x 6-7-cm piece ginger')).toBe('1 6-7-cm piece ginger')
+  expect(tidyAmount('2 cups/ 1 litre water')).toBe('2 cups water')
+  expect(tidyAmount('1 cup/250ml/8 fl oz milk')).toBe('1 cup milk')
+  expect(tidyAmount('2 x 1/2 cup cream')).toBe('2 x 1/2 cup cream')
+  expect(tidyAmount('2 x ½ cup cream')).toBe('2 x ½ cup cream')
+  expect(tidyAmount('1 lb/450g beef mince')).toBe('450g beef mince')
+  expect(tidyAmount('8 oz/225 g pasta')).toBe('225 g pasta')
+  expect(tidyAmount('200g/ 7 oz 70% dark chocolate')).toBe('200g 70% dark chocolate')
 })
 
 test('turns a Paprika recipe into a save_recipe draft', () => {
