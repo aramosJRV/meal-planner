@@ -34,3 +34,4 @@ playwright-report
 
 # Claude Code personal settings
 .claude/settings.local.json
+paprika-dry-run.json
