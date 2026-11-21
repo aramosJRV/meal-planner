@@ -54,6 +54,12 @@ test('tidies amounts before parsing', () => {
   expect(tidyAmount('1 x 375g packet pancake mix')).toBe('375g packet pancake mix')
   expect(tidyAmount('3 x Italian Sausage')).toBe('3 Italian Sausage')
   expect(tidyAmount('1 x 6-7-cm piece ginger')).toBe('1 6-7-cm piece ginger')
+  expect(tidyAmount('2 cups/ 1 litre water')).toBe('2 cups water')
+  expect(tidyAmount('1 cup/250ml/8 fl oz milk')).toBe('1 cup milk')
+  expect(tidyAmount('2 x 1/2 cup cream')).toBe('2 x 1/2 cup cream')
+  expect(tidyAmount('2 x ½ cup cream')).toBe('2 x ½ cup cream')
+  expect(tidyAmount('1 lb/450g beef mince')).toBe('450g beef mince')
+  expect(tidyAmount('8 oz/225 g pasta')).toBe('225 g pasta')
   expect(tidyAmount('200g/ 7 oz 70% dark chocolate')).toBe('200g 70% dark chocolate')
 })
 

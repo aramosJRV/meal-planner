@@ -71,17 +71,28 @@ export function mealTypes(categories: string[] = [], name = ''): string[] {
   return ['dinner']
 }
 
-// "150g/10 tbsp butter", "200g/ 7 oz chocolate": keep the first (metric) amount for parsing.
-// "450g/1lb 2oz flour" too: the second amount can have several parts.
-const ALT_AMOUNT =
-  /^([\d½¼¾⅓⅔][\d./\s½¼¾⅓⅔]*\s*[a-z]+)\s*\/(?:\s*[\d./½¼¾⅓⅔]+\s*(?:fl\.?\s*oz|ounces?|oz|pounds?|lbs?|cups?|tablespoons?|tbsp|teaspoons?|tsp|kg|g|ml|l|cm|inch(?:es)?|in)\.?){1,2}(?=\s)/i
-// "1 and 3/4 cups" → "1 3/4 cups"; "1 x 375g packet" → "375g packet"; "3 x sausages" → "3 sausages".
+// Unit words an amount after "/" can end in (the parser's units plus imperial ones).
+const UNIT =
+  '(?:fl\\.?\\s*oz|ounces?|oz|pounds?|lbs?|cups?|tablespoons?|tbsps?|tbs|teaspoons?|tsps?|' +
+  'kilograms?|kilos?|kgs?|grams?|gms?|g|millilit(?:re|er)s?|mls?|lit(?:re|er)s?|l|cm|inch(?:es)?|in)'
+const AMT = '[\\d½¼¾⅓⅔][\\d./\\s½¼¾⅓⅔]*'
+// "150g/10 tbsp butter", "2 cups/ 1 litre water", "450g/1lb 2oz flour": keep the first amount.
+const ALT_AMOUNT = new RegExp(
+  `^(${AMT}\\s*[a-z]+)\\s*\\/(?:\\s*[\\d./½¼¾⅓⅔]+\\s*${UNIT}\\.?){1,2}(?=\\s)`,
+  'i',
+)
+// "1 lb/450g beef", "8 oz/225 g pasta": the parser has no imperial units, so keep the metric one.
+const IMPERIAL_FIRST =
+  /^[\d½¼¾⅓⅔][\d./\s½¼¾⅓⅔]*\s*(?:lbs?|pounds?|oz|ounces?)\.?\s*\/\s*([\d.]+\s*(?:kg|g|grams?|ml|l|litres?))(?=\s)/i
+// "1 and 3/4 cups" → "1 3/4 cups"; "1 x 375g packet" → "375g packet"; "3 x sausages" → "3
+// sausages". A fraction after "x" ("2 x 1/2 cup") is left alone: "2 1/2" would misread it.
 export const tidyAmount = (l: string) =>
   l
+    .replace(IMPERIAL_FIRST, '$1')
     .replace(ALT_AMOUNT, '$1')
     .replace(/^(\d+)\s+and\s+(\d+\/\d+)/i, '$1 $2')
     .replace(/^1\s*x\s+(?=\d+(?:\.\d+)?\s*[a-z])/i, '')
-    .replace(/^(\d+)\s*x\s+/i, '$1 ')
+    .replace(/^(\d+)\s*x\s+(?!\d+\/|[½¼¾⅓⅔⅛])/i, '$1 ')
 
 // Section headings in the ingredients ("For the sauce:", "MARINADE") are not ingredients.
 // Lines with an amount never are. shortcut: an all-caps "SALT AND PEPPER" is dropped too;
