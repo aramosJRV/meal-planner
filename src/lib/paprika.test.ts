@@ -8,6 +8,10 @@ test('reads Paprika times', () => {
   expect(minutes('10 m')).toBe(10)
   expect(minutes('')).toBeNull()
   expect(minutes('overnight')).toBeNull()
+  expect(minutes('1h30m')).toBe(90)
+  expect(minutes('1 1/2 hours')).toBeNull()
+  expect(minutes('20000')).toBeNull()
+  expect(minutes('99999999999')).toBeNull()
 })
 
 test('reads servings, defaulting to 4', () => {
@@ -31,6 +35,8 @@ test('spots section headings', () => {
   expect(isHeading('MARINADE')).toBe(true)
   expect(isHeading('2 TBSP SOY SAUCE')).toBe(false)
   expect(isHeading('1 cup milk')).toBe(false)
+  expect(isHeading('½ CUP SUGAR')).toBe(false)
+  expect(isHeading('Juice of 1 lemon:')).toBe(false)
 })
 
 test('drops the second of two amounts', () => {
@@ -38,6 +44,9 @@ test('drops the second of two amounts', () => {
   expect(dropAltAmount('200g/ 7 oz dark chocolate')).toBe('200g dark chocolate')
   expect(dropAltAmount('1 1/2 cups/375ml milk')).toBe('1 1/2 cups milk')
   expect(dropAltAmount('1 cup flour')).toBe('1 cup flour')
+  expect(dropAltAmount('½ cup/125ml milk')).toBe('½ cup milk')
+  expect(dropAltAmount('450g/1lb 2oz flour')).toBe('450g flour')
+  expect(dropAltAmount('200g/ 7 oz 70% dark chocolate')).toBe('200g 70% dark chocolate')
 })
 
 test('turns a Paprika recipe into a save_recipe draft', () => {
@@ -68,6 +77,7 @@ test('turns a Paprika recipe into a save_recipe draft', () => {
     [125, 'ml', 'almond milk'],
   ])
   expect(d.lines[1].raw_text).toBe('125ml/1/2 cup almond milk')
+  expect(d.headings).toEqual(['BASE'])
   expect(d.steps).toEqual(['Mix well.', 'Chill overnight.'])
   expect(d.photo).toBe('abc')
   expect(toDraft({ name: '  ' })).toBeNull()

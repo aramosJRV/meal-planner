@@ -44,6 +44,7 @@ if (!apply) {
     ...d.recipe,
     photo: !!d.photo,
     steps: d.steps.length,
+    headings: d.headings,
     lines: d.lines.map(
       (l) => `${l.quantity ?? ''} ${l.unit_code ?? ''} | ${l.name} | ${l.note ?? ''}`,
     ),
@@ -68,18 +69,34 @@ if (members.data.length !== 1)
   throw new Error(`Expected one household, found ${members.data.length}`)
 const householdId = members.data[0].household_id as string
 
-const existing = await supabase
-  .from('recipes')
-  .select('title, source_url')
-  .eq('household_id', householdId)
-if (existing.error) throw existing.error
-const titles = new Set(existing.data.map((r) => r.title.toLowerCase()))
-const urls = new Set(existing.data.map((r) => r.source_url).filter(Boolean))
+// Paged: the API returns at most 1000 rows per request.
+const existing: { title: string; source_url: string | null }[] = []
+for (let from = 0; ; from += 1000) {
+  const page = await supabase
+    .from('recipes')
+    .select('title, source_url')
+    .eq('household_id', householdId)
+    .order('id')
+    .range(from, from + 999)
+  if (page.error) throw page.error
+  existing.push(...page.data)
+  if (page.data.length < 1000) break
+}
+// Skips what's already in the household, and repeats within the export itself.
+const titles = new Set(existing.map((r) => r.title.toLowerCase()))
+const urls = new Set(existing.map((r) => r.source_url).filter(Boolean))
 const todo = drafts
-  .filter((d) => !titles.has(d.recipe.title.toLowerCase()) && !urls.has(d.recipe.source_url))
+  .filter((d) => {
+    const t = d.recipe.title.toLowerCase()
+    const u = d.recipe.source_url
+    if (titles.has(t) || (u && urls.has(u))) return false
+    titles.add(t)
+    if (u) urls.add(u)
+    return true
+  })
   .slice(0, limit)
 
-console.log(`Household ${householdId}: ${existing.data.length} recipes now.`)
+console.log(`Household ${householdId}: ${existing.length} recipes now.`)
 console.log(
   `${drafts.length - todo.length} skipped (already there or past --limit); ${todo.length} to add.`,
 )
@@ -99,7 +116,10 @@ for (const d of todo) {
       p_names: names,
     })
     if (matches.error) throw matches.error
-    const lines = applyMatches(d.lines, matches.data as Match[])
+    // Exact matches only: the app has a person check fuzzy matches; here nobody does.
+    // Anything else becomes a new household ingredient, which can be merged later.
+    const exact = (matches.data as Match[]).filter((m) => m.canonical_name === m.query)
+    const lines = applyMatches(d.lines, exact)
     const saved = await supabase.rpc('save_recipe', {
       p_household_id: householdId,
       p_recipe_id: null,
