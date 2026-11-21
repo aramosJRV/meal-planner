@@ -3,13 +3,13 @@
 Working name: **Meal Planner** (rename later). Status: design locked 2026-10-11, ready for build.
 
 ## 1. Product summary
-A household meal-planning app. Users build a personal recipe library (manual, URL import, Instagram via share sheet + AI extraction), get a suggested weekly plan they can tweak, and shop from an auto-generated, shared grocery list that works offline.
+A household meal-planning app. Users build a personal recipe library by importing recipes (URL import, Instagram via share sheet + AI extraction); recipes aren't typed in by hand, get a suggested weekly plan they can tweak, and shop from an auto-generated, shared grocery list that works offline.
 
 ## 2. Locked decisions
 | # | Area | Decision |
 |---|------|----------|
 | 1 | Audience | Own household now, public web app next (M7), store apps later (M8) → multi-household (multi-tenant) from day one |
-| 2 | Recipe source | User's own library: manual entry + URL import. No third-party recipe API, no AI-generated recipes. In-app web search (added 2026-11-01, user's request) only finds pages to bring in through URL import |
+| 2 | Recipe source | User's own library, imported only: URL import, or caption/screenshots via AI extraction. No manual entry (decided 2026-11-21: too many steps and ingredients to type); imported recipes can still be edited. No third-party recipe API, no AI-generated recipes. In-app web search (added 2026-11-01, user's request) only finds pages to bring in through URL import |
 | 3 | Instagram | No API exists for others' posts. Share sheet → user pastes caption and/or attaches screenshots → AI extracts structured recipe → user reviews → save |
 | 4 | Platforms | Capacitor iOS + Android + responsive web dashboard, one codebase. **Web launches first** (decided 2026-10-27); store apps postponed to M8 |
 | 5 | Ingredients | Canonical ingredient table; per-line quantity + unit; conversion only within a unit family; pantry-staple flag |
@@ -120,7 +120,7 @@ Coles has no public API for outside apps to fill a shopper's trolley (its recipe
 ## 10. Screens (v1)
 - **Onboarding**: sign in → create household or join with code
 - **This Week** (home): grid on web / day list on phone; per slot: recipe card, servings, lock, reshuffle, swap; "Suggest week"
-- **Recipe library**: search, filter by meal type / favourite / cuisine; add (manual, URL, import)
+- **Recipe library**: search, filter by meal type / favourite / cuisine; import (link, caption, screenshots); photo per recipe (shown in the library, recipe page and This Week)
 - **Recipe detail**: ingredients scaled to chosen servings, steps, source link, "cook mode" (screen stays awake)
 - **Import review**: extracted fields editable, ingredient mappings with "new ingredient" flags, save
 - **Grocery list**: grouped by aisle, tick, add manual item, refresh from plan, offline indicator
@@ -132,6 +132,11 @@ Editorial, set like a printed menu. Mockups: https://claude.ai/artifact/J9v8RCAU
 - **Colour**: paper `#FBFAF7`, ink `#161412`, muted `#6B655E`, hairlines `#DEDAD3`, one accent red `#B3261E` (today, locks, section labels). No other accent colours.
 - **Shape**: no cards, no shadows, square corners. Structure comes from hairline rules (1.5px ink rule to open a section, 1px rules between rows). Text-only bottom nav with a red underline on the active tab. One solid ink button per screen as the main action.
 - **Copy**: warm and plain ("Nothing yet", "You'll need", "Start cooking"), Australian English.
+
+### Recipe photos (added 2026-11-20/21)
+- Every recipe can have one photo (`recipes.image_path`, JPEG in `recipe-media` under `{household_id}/recipes/`). Link imports bring the page's schema.org photo; any recipe's photo can be added, changed or removed on Edit.
+- **One-time catch-up ("Find photos")**: the Recipes screen offers to fetch photos for website recipes that have none (from before photos existed). It re-reads each recipe's page through `import-url` (no AI, no daily limit). Recipes whose site answered are remembered on that device, so the offer goes away once done. Instagram/screenshot recipes have no page photo: add those on Edit.
+- Claude doesn't make images; photos are only ever the recipe page's own or the household's upload.
 
 ## 11. Build milestones
 Each milestone ends with tests passing and a working build. Merge to `main` on green CI + independent reviewer approval; releases and migrations need human approval (see CLAUDE.md).

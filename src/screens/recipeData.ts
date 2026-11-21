@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type Line, readLines } from '@/lib/importLines'
+import { FunctionsHttpError } from '@supabase/supabase-js'
+import { dataUrlToBlob, uploadJpeg } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
 
 export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -75,7 +77,7 @@ export function useRecipes(householdId: string) {
       const { data, error } = await supabase
         .from('recipes')
         .select(
-          'id, title, cuisine, meal_types, is_favourite, prep_minutes, cook_minutes, base_servings, image_path',
+          'id, title, cuisine, meal_types, is_favourite, prep_minutes, cook_minutes, base_servings, image_path, source_type, source_url',
         )
         .eq('household_id', householdId)
         .order('title')
@@ -166,4 +168,61 @@ export function usePhotoUrls(paths: (string | null | undefined)[]) {
       return Object.fromEntries(data.map((d) => [d.path, d.signedUrl])) as Record<string, string>
     },
   }).data
+}
+
+// Past recipes from a website, re-read for their photo (a one-time catch-up: new imports bring
+// their own). Recipes whose site answered are remembered on this device so they aren't retried.
+const triedKey = (householdId: string) => `photo-finder-tried:${householdId}`
+export function photosTried(householdId: string): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(triedKey(householdId)) ?? '[]') as string[])
+  } catch {
+    return new Set()
+  }
+}
+
+export function useFindPhotos(householdId: string, onEach: (done: number) => void) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (recipes: { id: string; source_url: string }[]) => {
+      const tried = photosTried(householdId)
+      let found = 0
+      for (const [i, r] of recipes.entries()) {
+        onEach(i)
+        const { data, error } = await supabase.functions.invoke('import-url', {
+          body: { url: r.source_url },
+        })
+        // Only a site answer (422: no page, no recipe, blocked) is final. No connection, an
+        // expired login or a server fault: leave it for next time.
+        if (error && !(error instanceof FunctionsHttpError && error.context.status === 422)) {
+          console.error('find photo', r.id, error)
+          continue
+        }
+        tried.add(r.id)
+        const blob = data?.photo ? dataUrlToBlob(data.photo) : undefined
+        if (!blob) continue
+        try {
+          const path = await uploadJpeg(householdId, 'recipes', blob)
+          // Never replace a photo added meanwhile (Edit, another phone); skip deleted recipes.
+          const saved = await supabase
+            .from('recipes')
+            .update({ image_path: path })
+            .eq('id', r.id)
+            .is('image_path', null)
+            .select('id')
+          if (saved.error) throw saved.error
+          if (saved.data.length) found++
+        } catch (e) {
+          console.error('find photo', r.id, e)
+        }
+      }
+      try {
+        localStorage.setItem(triedKey(householdId), JSON.stringify([...tried]))
+      } catch {
+        // private window: the offer just shows again next time
+      }
+      return { found, of: recipes.length }
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['recipes', householdId] }),
+  })
 }

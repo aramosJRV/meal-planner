@@ -141,8 +141,8 @@ export default function ChooseMeal(p: {
       {recipes.isSuccess && !recipes.data.length && (
         <p className="text-muted-foreground font-serif text-xl italic">
           No recipes yet.{' '}
-          <a href="#/recipes/new" className="underline">
-            Add one
+          <a href="#/recipes/import" className="underline">
+            Import one
           </a>{' '}
           first.
         </p>

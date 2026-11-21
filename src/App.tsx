@@ -10,11 +10,8 @@ import Onboarding from '@/screens/Onboarding'
 import type { Household } from '@/screens/planData'
 import RecipeDetail from '@/screens/RecipeDetail'
 import RecipeEdit from '@/screens/RecipeEdit'
-import RecipeForm from '@/screens/RecipeForm'
 import Privacy from '@/screens/Privacy'
-import { emptyDraft } from '@/screens/recipeData'
 import RecipeLibrary from '@/screens/RecipeLibrary'
-import Screen from '@/screens/Screen'
 import Settings from '@/screens/Settings'
 import SignIn from '@/screens/SignIn'
 import ThisWeek from '@/screens/ThisWeek'
@@ -96,12 +93,6 @@ function Routes(props: { household: Household; userId: string }) {
       />
     )
   if (!id) return <RecipeLibrary householdId={householdId} />
-  if (id === 'new')
-    return (
-      <Screen title="Add recipe" back="#/recipes" wide>
-        <RecipeForm householdId={householdId} initial={emptyDraft} />
-      </Screen>
-    )
   if (id === 'import') return <ImportRecipe householdId={householdId} />
   if (action === 'edit') return <RecipeEdit key={id} id={id} householdId={householdId} />
   return <RecipeDetail key={id} id={id} householdId={householdId} />
