@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import { buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MEAL_TYPES, usePhotoUrls, useRecipes } from './recipeData'
+import { Button } from '@/components/ui/button'
+import {
+  MEAL_TYPES,
+  photosTried,
+  type Recipe,
+  useFindPhotos,
+  usePhotoUrls,
+  useRecipes,
+} from './recipeData'
 import Screen from './Screen'
 
 const select =
@@ -27,14 +35,13 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
 
   return (
     <Screen title="Recipes" nav="recipes" wide>
+      {/* Recipes are only imported (link, caption or screenshots): typing one in is too much work. */}
       <div className="flex gap-2">
-        <a href="#/recipes/new" className={buttonVariants()}>
-          Add recipe
-        </a>
-        <a href="#/recipes/import" className={buttonVariants({ variant: 'outline' })}>
+        <a href="#/recipes/import" className={buttonVariants()}>
           Import a recipe
         </a>
       </div>
+      <PhotoFinder householdId={householdId} recipes={all} />
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
         <Input
@@ -89,7 +96,7 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
         </p>
       )}
       {recipes.isSuccess && !all.length && (
-        <p className="text-muted-foreground">No recipes yet. Add your first one above.</p>
+        <p className="text-muted-foreground">No recipes yet. Import your first one above.</p>
       )}
       {recipes.isSuccess && !!all.length && !shown.length && (
         <p className="text-muted-foreground">No recipes match those filters.</p>
@@ -141,5 +148,46 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
         })}
       </ul>
     </Screen>
+  )
+}
+
+// One-time catch-up for recipes imported from a website before photos existed.
+function PhotoFinder(p: {
+  householdId: string
+  recipes: Pick<Recipe, 'id' | 'image_path' | 'source_type' | 'source_url'>[]
+}) {
+  const [done, setDone] = useState(0)
+  const find = useFindPhotos(p.householdId, setDone)
+  const tried = photosTried(p.householdId)
+  const missing = p.recipes.filter(
+    (r): r is typeof r & { source_url: string } =>
+      !r.image_path && r.source_type === 'url' && !!r.source_url && !tried.has(r.id),
+  )
+  if (find.data)
+    return (
+      <p role="status" className="text-sm">
+        Found photos for {find.data.found} of {find.data.of} recipes.
+        {find.data.found < find.data.of &&
+          ' For the rest, open the recipe, press Edit and add a photo.'}
+      </p>
+    )
+  if (!missing.length && !find.isPending) return null
+  const count =
+    missing.length === 1
+      ? '1 recipe from a website has'
+      : `${missing.length} recipes from websites have`
+  return (
+    <div className="flex flex-col items-start gap-2 border-y py-4">
+      <p className="text-sm">
+        {find.isPending
+          ? `Finding photos… ${done + 1} of ${find.variables.length}`
+          : `${count} no photo yet. The app can fetch each photo from the recipe's website.`}
+      </p>
+      {!find.isPending && (
+        <Button variant="outline" onClick={() => find.mutate(missing)}>
+          Find photos
+        </Button>
+      )}
+    </div>
   )
 }

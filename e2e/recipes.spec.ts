@@ -4,27 +4,75 @@ import { parseRecipePage } from '../supabase/functions/import-url/recipe.ts'
 import { signIn } from './auth.ts'
 import { anonKey, api, newHousehold } from './helpers.ts'
 
-test('add a recipe by hand, find it in the library, change servings', async ({ page }) => {
+// An 8×8 red PNG, standing in for the photo import-url fetches from the recipe page.
+const PHOTO =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGPYrCaHFTEMLQkARnA9wUDwlJ0AAAAASUVORK5CYII='
+const photoShown = (img: import('@playwright/test').Locator) =>
+  expect
+    .poll(() =>
+      img.evaluate((el) => (el as { complete: boolean; naturalWidth: number }).naturalWidth),
+    )
+    .toBeGreaterThan(0)
+
+// The real import-url fetches pages server-side and refuses local addresses (SSRF guard),
+// so these tests answer for it.
+const fakeImportUrl = (page: import('@playwright/test').Page, body: () => object) =>
+  page.route('**/functions/v1/import-url', (route) =>
+    route.fulfill({
+      status: route.request().method() === 'OPTIONS' ? 204 : 200,
+      headers: {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': '*',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body()),
+    }),
+  )
+
+test('import a recipe, find it in the library, change servings, find its photo', async ({
+  page,
+}) => {
+  const recipe = {
+    title: 'Garlic prawns',
+    description: null,
+    base_servings: 4,
+    prep_minutes: null,
+    cook_minutes: 15,
+    cuisine: 'Spanish',
+    meal_types: ['dinner'],
+    ingredients: ['800 g prawns', '2 cloves garlic, crushed', '1½ cups rice', 'salt to taste'],
+    steps: ['Cook the rice.', 'Fry the garlic and prawns.'],
+    source_url: 'https://recipes.example/garlic-prawns',
+    image_url: null,
+  }
+  // Imported before photos existed: no photo. Later the site gives one.
+  let photo: string | null = null
+  await fakeImportUrl(page, () => ({ recipe, photo }))
   await newHousehold(page, 'cook')
   await expect(page.getByText('No recipes yet.')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Add recipe' })).toHaveCount(0)
 
-  await page.getByRole('link', { name: 'Add recipe' }).click()
-  await page.getByLabel('Title').fill('Garlic prawns')
-  await page.getByLabel('Serves').fill('4')
-  await page.getByLabel('Cook (min)').fill('15')
-  await page.getByLabel('Cuisine').fill('Spanish')
-  await page
-    .getByLabel('Ingredients')
-    .fill('800 g prawns\n2 cloves garlic, crushed\n1½ cups rice\nsalt to taste')
-  await page.getByLabel('Method').fill('Cook the rice.\nFry the garlic and prawns.')
+  await page.getByRole('link', { name: 'Import a recipe' }).click()
+  await page.getByLabel('Link').fill(recipe.source_url)
+  await page.getByRole('button', { name: 'Get recipe' }).click()
+  await expect(page.getByLabel('Title')).toHaveValue('Garlic prawns')
   await page.getByRole('button', { name: 'Save recipe' }).click()
 
   await expect(page.getByRole('heading', { name: 'Garlic prawns' })).toBeVisible()
   await page.getByRole('link', { name: '← Back' }).click()
   await page.getByLabel('Search recipes').fill('prawn')
   await page.getByLabel('Cuisine').selectOption('Spanish')
-  await page.getByRole('link', { name: /Garlic prawns/ }).click()
 
+  // One-time catch-up: fetch the photo from the recipe's website.
+  photo = PHOTO
+  await expect(page.getByText(/1 recipe from a website has no photo yet/)).toBeVisible()
+  await page.getByRole('button', { name: 'Find photos' }).click()
+  await expect(page.getByRole('status')).toHaveText('Found photos for 1 of 1 recipes.')
+  await photoShown(page.getByRole('link', { name: /Garlic prawns/ }).locator('img'))
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Find photos' })).toHaveCount(0)
+
+  await page.getByRole('link', { name: /Garlic prawns/ }).click()
   const ingredients = page.getByTestId('ingredients')
   await expect(ingredients).toContainText('800 g prawns')
   for (let i = 0; i < 4; i++) await page.getByRole('button', { name: 'More servings' }).click()
@@ -39,32 +87,11 @@ test('add a recipe by hand, find it in the library, change servings', async ({ p
   await expect(page.getByRole('button', { name: '★ Favourite' })).toBeVisible()
 })
 
-// An 8×8 red PNG, standing in for the photo import-url fetches from the recipe page.
-const PHOTO =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGPYrCaHFTEMLQkARnA9wUDwlJ0AAAAASUVORK5CYII='
-const photoShown = (img: import('@playwright/test').Locator) =>
-  expect
-    .poll(() =>
-      img.evaluate((el) => (el as { complete: boolean; naturalWidth: number }).naturalWidth),
-    )
-    .toBeGreaterThan(0)
-
-// The real import-url fetches pages server-side and refuses local addresses (SSRF guard),
-// so here its response is built from the local test page with the real parser.
+// The fake import-url's answer is built from the local test page with the real parser.
 test('add a recipe from a link, review it, save it', async ({ page }) => {
   const sourceUrl = 'https://recipes.example/lemon-chicken'
   const fixture = readFileSync(new URL('./fixtures/recipe-page.html', import.meta.url), 'utf8')
-  await page.route('**/functions/v1/import-url', (route) =>
-    route.fulfill({
-      status: route.request().method() === 'OPTIONS' ? 204 : 200,
-      headers: {
-        'access-control-allow-origin': '*',
-        'access-control-allow-headers': '*',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ recipe: parseRecipePage(fixture, sourceUrl), photo: PHOTO }),
-    }),
-  )
+  await fakeImportUrl(page, () => ({ recipe: parseRecipePage(fixture, sourceUrl), photo: PHOTO }))
   await newHousehold(page, 'importer')
 
   await page.getByRole('link', { name: 'Import a recipe' }).click()
