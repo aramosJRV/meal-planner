@@ -48,7 +48,7 @@ All household-owned tables carry `household_id uuid not null` and RLS: row visib
 - `ingredients` — `id`, `household_id` (null = global seed), `name`, `canonical_name` (lowercase, singular), `aisle_category`, `is_pantry_staple bool`, `tags text[]`. Unique (household_id, canonical_name). Seed ~300 common global ingredients.
 
 **Recipes**
-- `recipes` — `id`, `household_id`, `title`, `description`, `base_servings int`, `prep_minutes`, `cook_minutes`, `cuisine`, `meal_types text[]` (which slots it suits), `image_path`, `source_type` (`manual`|`url`|`instagram`), `source_url`, `is_favourite bool`, `notes`, `created_by`
+- `recipes` — `id`, `household_id`, `title`, `description`, `base_servings int`, `prep_minutes`, `cook_minutes`, `cuisine`, `meal_types text[]` (which slots it suits, or `side` for a side dish: not a slot, so the planner never picks a side-only recipe), `image_path`, `source_type` (`manual`|`url`|`instagram`), `source_url`, `is_favourite bool`, `notes`, `created_by`
 - `recipe_ingredients` — `id`, `recipe_id`, `ingredient_id`, `quantity numeric null`, `unit_code null` (FK units), `raw_text` (original line, always kept), `note` (e.g. "finely chopped"), `position`
 - `recipe_steps` — `id`, `recipe_id`, `position`, `text`
 - `recipe_imports` — `id`, `household_id`, `status` (`pending`|`extracted`|`saved`|`failed`), `source_type`, `source_url`, `input_text`, `input_image_paths text[]`, `extracted jsonb`, `error`, `recipe_id null`, `created_by`
