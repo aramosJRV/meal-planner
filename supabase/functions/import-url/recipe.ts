@@ -101,6 +101,7 @@ function mealTypes(category: unknown): string[] {
       ['lunch', /lunch/],
       ['dinner', /dinner|main|supper/],
       ['snack', /snack/],
+      ['side', /\bside/],
     ] as const
   )
     .filter(([, re]) => re.test(text))

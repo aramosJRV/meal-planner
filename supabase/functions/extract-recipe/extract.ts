@@ -4,7 +4,7 @@
 import { clean } from '../import-url/recipe.ts'
 
 export const UNIT_CODES = ['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup', 'clove', 'pinch', 'each']
-const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack']
+const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack', 'side']
 export const MAX_TEXT = 20000
 export const MAX_IMAGES = 5
 
@@ -50,7 +50,7 @@ Rules:
 - note: preparation or other detail (e.g. "diced"), or null.
 - quantity and unit: the amount as a number and one of the allowed unit codes. Use "each" for counted items. If the unit is not in the list (e.g. ounces), or there is no amount (e.g. "salt to taste"), set both to null.
 - servings, prep_minutes, cook_minutes: only if the material says them; otherwise null.
-- meal_types: which meals the dish suits; default to ["dinner"] if unclear.
+- meal_types: which meals the dish suits ("side" for a side dish served with a main); default to ["dinner"] if unclear.
 - Write any text you add in Australian English.`
 
 const nullable = (type: string) => ({ anyOf: [{ type }, { type: 'null' }] })

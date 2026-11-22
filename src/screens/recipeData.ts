@@ -4,7 +4,8 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { dataUrlToBlob, uploadJpeg } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
 
-export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const
+export const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack', 'side'] as const
+export const mealTypeLabel = (t: string) => (t === 'side' ? 'side dish' : t)
 
 // What the recipe form edits. Ingredients and steps are one per line.
 export type Draft = {

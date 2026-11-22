@@ -2,7 +2,7 @@
 -- Cast: owner_a + member_a share household A; owner_b owns household B; plus a signed-out user.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(54);
+select plan(57);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'owner_a@test.local'),
@@ -190,6 +190,15 @@ update public.recipes set updated_at = '2000-01-01' where id = pg_temp.v('rb');
 update public.recipes set title = 'B soup 2' where id = pg_temp.v('rb');
 select ok((select updated_at > '2000-01-01' from public.recipes where id = pg_temp.v('rb')),
   'updated_at is maintained by trigger');
+
+-- ── side dish ────────────────────────────────────────────────────────────────
+select pg_temp.login('00000000-0000-0000-0000-00000000000b');
+select lives_ok($$ update public.recipes set meal_types = '{side}' where id = current_setting('test.rb')::uuid $$,
+  'a recipe can be a side dish');
+select is((select meal_types from public.recipes where id = pg_temp.v('rb')), '{side}', 'the side dish tag is saved');
+select throws_ok($$ update public.recipes set meal_types = '{dessert}' where id = current_setting('test.rb')::uuid $$,
+  '23514', null, 'unknown meal types are still refused');
+reset role;
 
 select * from finish();
 rollback;
