@@ -6,7 +6,14 @@ import { Label } from '@/components/ui/label'
 import { applyMatches, type Hint, type Match, readLines } from '@/lib/importLines'
 import { uploadJpeg } from '@/lib/media'
 import { supabase } from '@/lib/supabase'
-import { type Draft, go, MEAL_TYPES, mealTypeLabel, usePhotoUrls, useSaveRecipe } from './recipeData'
+import {
+  type Draft,
+  go,
+  MEAL_TYPES,
+  mealTypeLabel,
+  usePhotoUrls,
+  useSaveRecipe,
+} from './recipeData'
 
 const textarea =
   'border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 min-h-24 w-full rounded-md border bg-transparent px-3 py-2 text-base outline-none focus-visible:ring-[3px] md:text-sm'
