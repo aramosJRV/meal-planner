@@ -10,6 +10,7 @@ export type PlannerSettings = {
   w_overlap: number
   w_cuisine: number
   w_jitter: number
+  w_similar: number // penalty for a name like one already in the week
   weeknight_cap: number // minutes, prep + cook, Mon–Thu
 }
 
@@ -19,6 +20,7 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
   w_overlap: 0.5,
   w_cuisine: 0.3,
   w_jitter: 0.1,
+  w_similar: 3,
   weeknight_cap: 45,
 }
 
@@ -42,6 +44,7 @@ export function enabledSlots(config: unknown): Slot[] {
 
 export type Candidate = {
   id: string
+  title: string
   meal_types: string[]
   prep_minutes: number | null
   cook_minutes: number | null
@@ -112,6 +115,31 @@ export function jaccard(a: Set<string>, b: Set<string>): number {
   return shared / (a.size + b.size - shared)
 }
 
+// Words that say nothing about what the dish is.
+const FILLER = new Set([
+  'and',
+  'with',
+  'the',
+  'a',
+  'of',
+  'in',
+  'on',
+  'my',
+  'easy',
+  'quick',
+  'best',
+  'style',
+])
+// "Beef & Spinach Cottage Pie" → {beef, spinach, cottage, pie}; plurals folded ("pies" = "pie").
+export const titleWords = (title: string) =>
+  new Set(
+    title
+      .toLowerCase()
+      .split(/[^a-z]+/)
+      .filter((w) => w.length > 1 && !FILLER.has(w))
+      .map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)),
+  )
+
 const cuisineKey = (c: string | null) => c?.trim().toLowerCase() || null
 
 // Fills each target in date then slot order, scoring every candidate against what the
@@ -149,6 +177,7 @@ export function planWeek(input: {
     const weekIngredients = new Set(
       week.flatMap((e) => byId.get(e.recipe_id)?.ingredients.map((i) => i.id) ?? []),
     )
+    const weekTitles = week.map((e) => titleWords(byId.get(e.recipe_id)?.title ?? ''))
     let best: { r: Candidate; score: number } | null = null
     for (const r of pool) {
       const cuisine = cuisineKey(r.cuisine)
@@ -157,12 +186,16 @@ export function planWeek(input: {
         : 0
       // Only repeats have a count; it spreads them out instead of piling onto one recipe.
       const timesThisWeek = week.filter((e) => e.recipe_id === r.id).length
+      const mine = titleWords(r.title)
+      // Most similar name already in the week (Cottage pie vs Beef cottage pie = 0.5).
+      const similar = Math.max(0, ...weekTitles.map((w) => jaccard(mine, w)))
       const score =
         -timesThisWeek * 10 +
         s.w_recency * recency(r.last_planned, t.date) +
         s.w_fav * (r.is_favourite ? 1 : 0) +
         s.w_overlap * jaccard(new Set(r.ingredients.map((i) => i.id)), weekIngredients) -
-        s.w_cuisine * sameCuisine +
+        s.w_cuisine * sameCuisine -
+        s.w_similar * similar +
         s.w_jitter * rand()
       if (!best || score > best.score) best = { r, score }
     }

@@ -9,6 +9,7 @@ import {
   readSettings,
   recency,
   seededRandom,
+  titleWords,
   toCandidate,
   weekDates,
   weekStartFor,
@@ -29,6 +30,7 @@ const only = (over: Partial<typeof DEFAULT_SETTINGS>) => ({
 
 const recipe = (id: string, over: Partial<Candidate> = {}): Candidate => ({
   id,
+  title: id,
   meal_types: ['dinner'],
   prep_minutes: 10,
   cook_minutes: 20,
@@ -328,10 +330,38 @@ describe('wiring', () => {
     ])
   })
 
+  test('avoids a second meal with a similar name in the same week', () => {
+    const picks = planWeek({
+      recipes: [
+        recipe('pie', { title: 'Cottage pie', is_favourite: true }),
+        recipe('pie2', { title: 'Beef & Spinach Cottage Pies', is_favourite: true }),
+        recipe('curry', { title: 'Chicken curry' }),
+      ],
+      fixed: [],
+      targets: [
+        { date: MON, slot: 'dinner' },
+        { date: FRI, slot: 'dinner' },
+      ],
+      settings: noJitter,
+      seed: 's',
+    })
+    expect(picks.map((p) => p.recipe_id)).toContain('curry')
+  })
+
+  test('titleWords ignores filler and plurals', () => {
+    expect([...titleWords('Beef and Spinach Cottage Pies')]).toEqual([
+      'beef',
+      'spinach',
+      'cottage',
+      'pie',
+    ])
+  })
+
   test('toCandidate drops pantry staples from overlap', () => {
     const c = toCandidate(
       {
         id: 'r',
+        title: 'R',
         meal_types: ['dinner'],
         prep_minutes: null,
         cook_minutes: null,
