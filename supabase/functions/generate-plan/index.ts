@@ -100,7 +100,7 @@ export default {
     const { data: recipes, error: recipesError } = await db
       .from('recipes')
       .select(
-        'id, base_servings, meal_types, prep_minutes, cook_minutes, cuisine, is_favourite, recipe_ingredients(ingredient_id, ingredients(name, is_pantry_staple))',
+        'id, title, base_servings, meal_types, prep_minutes, cook_minutes, cuisine, is_favourite, recipe_ingredients(ingredient_id, ingredients(name, is_pantry_staple))',
       )
       .eq('household_id', householdId)
     if (recipesError) return serverError('load recipes', recipesError)
