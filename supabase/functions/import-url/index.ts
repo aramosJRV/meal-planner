@@ -4,6 +4,7 @@
 import '@supabase/functions-js/edge-runtime.d.ts'
 import { withSupabase } from '@supabase/server'
 import { fetchPage, fetchPhoto, ImportError } from './guard.ts'
+import { instagramEmbed, readEmbed } from './instagram.ts'
 import { pageText, parseRecipePage } from './recipe.ts'
 
 const fail = (error: string, status = 400) => Response.json({ error }, { status })
@@ -46,6 +47,21 @@ export default {
     const body = await req.json().catch(() => ({}))
     if (typeof body?.url !== 'string' || body.url.length > 2000) return fail('bad_url')
     try {
+      const embed = instagramEmbed(body.url.trim())
+      if (embed) {
+        const post = readEmbed((await fetchPage(embed, { fetch, resolve })).html)
+        if (!post) return fail('no_recipe', 422)
+        // Like a page without recipe data: the app has the AI read the caption.
+        return Response.json(
+          {
+            error: 'no_recipe',
+            text: post.text,
+            author: post.author,
+            photo: await photo(post.image_url),
+          },
+          { status: 422 },
+        )
+      }
       const page = await fetchPage(body.url.trim(), { fetch, resolve })
       const recipe = parseRecipePage(page.html, page.url)
       if (recipe) return Response.json({ recipe, photo: await photo(recipe.image_url) })
