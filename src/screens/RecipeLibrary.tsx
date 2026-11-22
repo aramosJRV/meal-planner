@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
   MEAL_TYPES,
+  mealTypeLabel,
   photosTried,
   type Recipe,
   useFindPhotos,
@@ -62,7 +63,7 @@ export default function RecipeLibrary({ householdId }: { householdId: string }) 
             <option value="">All meals</option>
             {MEAL_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {mealTypeLabel(t)}
               </option>
             ))}
           </select>
