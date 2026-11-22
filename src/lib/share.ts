@@ -1,5 +1,5 @@
-// Content shared to the app from another app's share sheet (DESIGN.md §9). Native only; the
-// plugin holds a share until this listener is registered, so cold starts don't lose it.
+// Content shared to the app from another app's share sheet (DESIGN.md §9). Native: the plugin
+// holds a share until this listener is registered, so cold starts don't lose it.
 import { Capacitor } from '@capacitor/core'
 import { CapacitorShareTarget, type ShareReceivedEvent } from '@capgo/capacitor-share-target'
 import { useSyncExternalStore } from 'react'
@@ -45,6 +45,17 @@ if (Capacitor.isNativePlatform()) {
   CapacitorShareTarget.addListener('shareReceived', receive).catch((e) =>
     console.error('share: listen', e),
   )
+} else if (window.location.pathname === '/share') {
+  // Web: Android's share menu (manifest share_target) and the iPhone Shortcut open
+  // /share?url=…&text=… (docs/sharing.md).
+  const params = new URLSearchParams(window.location.search)
+  set({
+    id: Date.now(),
+    ...readTexts(['url', 'text'].map((k) => params.get(k) ?? '').filter(Boolean)),
+    files: [],
+    lost: 0,
+  })
+  window.history.replaceState(null, '', '/#/recipes/import')
 }
 
 // Keeps the id so the import screen (keyed on it) doesn't restart and lose its result.

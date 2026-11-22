@@ -73,7 +73,8 @@ type Extracted = Imported & {
   source_type: Draft['source_type']
   ingredients: (Hint & { raw_text: string })[]
 }
-type Result = { draft: Draft; hints?: Record<string, Hint>; importId?: string }
+// author: the Instagram account, to help find the creator's own page for the full recipe.
+type Result = { draft: Draft; hints?: Record<string, Hint>; importId?: string; author?: string }
 
 const toDraft = (r: Imported, ingredients: string[], source_type: Draft['source_type']): Draft => ({
   ...emptyDraft,
@@ -100,6 +101,37 @@ async function extract(householdId: string, body: object): Promise<Result> {
   }
 }
 
+type Input = { url: string; text: string; files: File[] }
+
+async function getRecipeFrom(householdId: string, input: Input): Promise<Result> {
+  const url = input.url || null
+  if (!input.text && !input.files.length) {
+    if (!url) throw new Error('Add a link, the recipe text or a screenshot.')
+    try {
+      const { recipe, photo } = (await call('import-url', { url })) as {
+        recipe: Imported & { ingredients: string[] }
+        photo: string | null
+      }
+      const draft = toDraft(recipe, recipe.ingredients, 'url')
+      return { draft: { ...draft, photo: photo ? dataUrlToBlob(photo) : undefined } }
+    } catch (e) {
+      // No recipe data on the page (e.g. Instagram, blogs): let the AI read the page text.
+      if (!(e instanceof ImportFailed && e.reason === 'no_recipe' && e.body.text)) throw e
+      const { photo, author } = e.body as { photo?: string | null; author?: string | null }
+      const result = await extract(householdId, { text: e.body.text, source_url: url })
+      return {
+        ...result,
+        draft: { ...result.draft, photo: photo ? dataUrlToBlob(photo) : undefined },
+        author: author ?? undefined,
+      }
+    }
+  }
+  const image_paths = await Promise.all(
+    input.files.map((f) => uploadJpeg(householdId, 'imports', f)),
+  )
+  return extract(householdId, { text: input.text || null, image_paths, source_url: url })
+}
+
 type Found = { title: string; url: string; site: string }
 
 // Web search for recipe pages; picking one imports it like a pasted link.
@@ -107,10 +139,13 @@ function RecipeSearch({
   householdId,
   busy,
   onPick,
+  initialQuery,
 }: {
   householdId: string
   busy: boolean
   onPick: (url: string) => void
+  // Set on the review screen: searching for the full version of a caption or screenshot recipe.
+  initialQuery?: string
 }) {
   const search = useMutation({
     mutationFn: async (query: string) =>
@@ -128,7 +163,15 @@ function RecipeSearch({
           if (query.length >= 2) search.mutate(query)
         }}
       >
-        <Label htmlFor="q">Search for a recipe</Label>
+        <Label htmlFor="q">
+          {initialQuery ? 'Find the full recipe online' : 'Search for a recipe'}
+        </Label>
+        {initialQuery && (
+          <p className="text-muted-foreground text-sm">
+            Captions often leave things out. Many cooks put the full recipe on their own website.
+            Picking one replaces the recipe below.
+          </p>
+        )}
         <div className="flex gap-2">
           <Input
             id="q"
@@ -137,6 +180,7 @@ function RecipeSearch({
             placeholder="e.g. chicken laksa"
             minLength={2}
             maxLength={100}
+            defaultValue={initialQuery}
             required
           />
           <Button type="submit" variant="outline" disabled={search.isPending}>
@@ -175,7 +219,9 @@ function RecipeSearch({
           ))}
         </ul>
       )}
-      <p className="text-muted-foreground text-xs">Or bring in a recipe you already have:</p>
+      {!initialQuery && (
+        <p className="text-muted-foreground text-xs">Or bring in a recipe you already have:</p>
+      )}
     </section>
   )
 }
@@ -189,45 +235,54 @@ export default function ImportRecipe({ householdId }: { householdId: string }) {
 function ImportForm({ householdId, shared }: { householdId: string; shared: Shared | null }) {
   const [files, setFiles] = useState<File[]>(shared?.files ?? [])
   const getRecipe = useMutation({
-    mutationFn: async (input: { url: string; text: string; files: File[] }): Promise<Result> => {
-      const url = input.url || null
-      if (!input.text && !input.files.length) {
-        if (!url) throw new Error('Add a link, the recipe text or a screenshot.')
-        try {
-          const { recipe, photo } = (await call('import-url', { url })) as {
-            recipe: Imported & { ingredients: string[] }
-            photo: string | null
-          }
-          const draft = toDraft(recipe, recipe.ingredients, 'url')
-          return { draft: { ...draft, photo: photo ? dataUrlToBlob(photo) : undefined } }
-        } catch (e) {
-          // No recipe data on the page (e.g. Instagram, blogs): let the AI read the page text.
-          if (!(e instanceof ImportFailed && e.reason === 'no_recipe' && e.body.text)) throw e
-          return extract(householdId, { text: e.body.text, source_url: url })
-        }
-      }
-      const image_paths = await Promise.all(
-        input.files.map((f) => uploadJpeg(householdId, 'imports', f)),
-      )
-      return extract(householdId, { text: input.text || null, image_paths, source_url: url })
-    },
+    mutationFn: (input: Input) => getRecipeFrom(householdId, input),
     onSuccess: clearShare,
   })
+  const fullRecipe = useMutation({
+    mutationFn: (input: Input) => getRecipeFrom(householdId, input),
+  })
 
-  if (getRecipe.data)
+  const first = getRecipe.data
+  if (first) {
+    const full = fullRecipe.data
+    const result = full
+      ? { ...full, draft: { ...full.draft, photo: full.draft.photo ?? first.draft.photo } }
+      : first
     return (
       <Screen title="Check the recipe" back="#/recipes" wide>
         <p className="text-muted-foreground text-sm">
           Here's what we found. Fix anything that's wrong, then save.
         </p>
+        {first.draft.source_type !== 'url' && !full && (
+          <>
+            <RecipeSearch
+              householdId={householdId}
+              busy={fullRecipe.isPending}
+              onPick={(url) => fullRecipe.mutate({ url, text: '', files: [] })}
+              initialQuery={`${first.draft.title} ${first.author ?? ''}`.trim().slice(0, 100)}
+            />
+            {fullRecipe.isPending && (
+              <p role="status" className="text-sm">
+                Reading the recipe…
+              </p>
+            )}
+            {fullRecipe.isError && (
+              <p role="alert" className="text-destructive text-sm">
+                {fullRecipe.error.message}
+              </p>
+            )}
+          </>
+        )}
         <RecipeForm
+          key={full ? 'full' : 'first'}
           householdId={householdId}
-          initial={getRecipe.data.draft}
-          hints={getRecipe.data.hints}
-          importId={getRecipe.data.importId}
+          initial={result.draft}
+          hints={result.hints}
+          importId={result.importId}
         />
       </Screen>
     )
+  }
 
   return (
     <Screen title="Import a recipe" back="#/recipes">

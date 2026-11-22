@@ -10,7 +10,7 @@ A household meal-planning app. Users build a personal recipe library by importin
 |---|------|----------|
 | 1 | Audience | Own household now, public web app next (M7), store apps later (M8) → multi-household (multi-tenant) from day one |
 | 2 | Recipe source | User's own library, imported only: URL import, or caption/screenshots via AI extraction. No manual entry (decided 2026-11-21: too many steps and ingredients to type); imported recipes can still be edited. No third-party recipe API, no AI-generated recipes. In-app web search (added 2026-11-01, user's request) only finds pages to bring in through URL import |
-| 3 | Instagram | No API exists for others' posts. Share sheet → user pastes caption and/or attaches screenshots → AI extracts structured recipe → user reviews → save |
+| 3 | Instagram | No API exists for others' posts. Share sheet → user pastes caption and/or attaches screenshots → AI extracts structured recipe → user reviews → save. A pasted or shared post link is read through Instagram's public embed view (caption + photo, no login; added 2026-11-22). The review screen offers "Find the full recipe online" (the creator's website, via recipe search) |
 | 4 | Platforms | Capacitor iOS + Android + responsive web dashboard, one codebase. **Web launches first** (decided 2026-10-27); store apps postponed to M8 |
 | 5 | Ingredients | Canonical ingredient table; per-line quantity + unit; conversion only within a unit family; pantry-staple flag |
 | 6 | Plan shape | Configurable slots per household (breakfast/lunch/dinner/snack), dinner-only by default; one recipe may fill multiple slots (leftovers) |
@@ -113,7 +113,7 @@ Coles has no public API for outside apps to fill a shopper's trolley (its recipe
 - Everything else (import, planning) requires connectivity; show a clear offline state.
 
 ## 9. Share sheet (Instagram and others)
-- Phone apps only (dormant until M8; web uses paste/upload on the Import screen). iOS Share Extension + Android `ACTION_SEND` intent filter, receiving URL / text / images.
+- Phone apps only (dormant until M8). Web (2026-11-22): `/share?url=…&text=…` opens Import prefilled; Android's share menu reaches it via the manifest `share_target`, iPhone via a Shortcut (`docs/sharing.md`). iOS Share Extension + Android `ACTION_SEND` intent filter, receiving URL / text / images.
 - Payload handed to the app → opens **Import** screen prefilled (URL, any shared text, images). User can paste caption and add screenshots, then "Extract".
 - **Spike (M3, 2026-10-20)**: chose `@capgo/capacitor-share-target` (free, Capacitor 8, iOS + Android, text/links/images) plus a small iOS Share Extension writing to the App Group `group.com.jrvsolutions.mealplanner`. Rejected: Capawesome share-target (paid), send-intent (Capacitor 7 only), fully custom native code (more to maintain).
 
