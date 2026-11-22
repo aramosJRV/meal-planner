@@ -349,6 +349,7 @@ describe('wiring', () => {
   })
 
   test('titleWords ignores filler and plurals', () => {
+    expect([...titleWords('Crème brûlée')]).toEqual(['crème', 'brûlée'])
     expect([...titleWords('Beef and Spinach Cottage Pies')]).toEqual([
       'beef',
       'spinach',

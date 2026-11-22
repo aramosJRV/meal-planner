@@ -135,7 +135,7 @@ export const titleWords = (title: string) =>
   new Set(
     title
       .toLowerCase()
-      .split(/[^a-z]+/)
+      .split(/[^\p{L}]+/u)
       .filter((w) => w.length > 1 && !FILLER.has(w))
       .map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)),
   )
